@@ -29,7 +29,12 @@ class IOChecker:
     def _assert_output(self):
         if self.observed_output != self.expected_output[:len(self.observed_output)]:
             next_newline = self.expected_output.find('\n', len(self.observed_output))
-            assert self.observed_output == self.expected_output[:next_newline], "Program output did not match expected output"
+            x = 76 - min(len(self.observed_output), len(self.expected_output[:next_newline]))
+            prefix = ('*'*x)
+            if 'n' not in self.observed_output or 'n' not in self.expected_output[:next_newline]:
+                prefix += '\n'
+            assert prefix + self.observed_output == prefix + self.expected_output[:next_newline] + '\n' , "Program output did not match expected output"
+
 
     @wraps(input)
     def _input(self, prompt):
