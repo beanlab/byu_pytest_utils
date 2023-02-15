@@ -39,10 +39,11 @@ class IOChecker:
         self._assert_output()
         # Input is from the current position to next newline in expected output
         next_newline = self.expected_output.find('\n', len(self.observed_output))
-        result = self.expected_output[len(self.observed_output):next_newline]
+        result = (self.expected_output[len(self.observed_output):next_newline]).strip()
         if self.echo_output:
             print(result)
         self.observed_output += result + '\n'
+        self._assert_output()
         return result
 
     @wraps(print)
