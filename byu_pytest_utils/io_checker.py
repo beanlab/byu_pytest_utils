@@ -5,19 +5,25 @@ import runpy
 import sys
 import traceback
 from functools import wraps
+from internet_retrieval import get_test_files_from_website
 
 from byu_pytest_utils.edit_dist import edit_dist
 
 
-def check_io(expected_dialog_file, script_name, *script_args, echo_output=False):
+def check_io(expected_dialog_file, script_name, *script_args, echo_output=False, assignment_name = None):
     """
     Run the script and check it's input and print calls against the expected dialog
     :param echo_output:
     :param expected_dialog_file: A file that contains the expected dialog of the script
     :param script_name: Name of script (including necessary path and .py extension) being called
+    :param assignment_name: Format is 'homework1a' or 'project3'
     :param script_args: Command-line arguments to the script
+
     :return: A dictionary containing the resulting namespace of the executed script
     """
+    if assignment_name:
+        get_test_files_from_website(assignment_name)
+
     if not os.path.exists(script_name):
         raise Exception(f'{script_name} not found. Was it submitted?')
 
