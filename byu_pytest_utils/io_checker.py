@@ -36,7 +36,7 @@ def record_script(dialog_file, script_name, *script_args):
     # Intercept input, print, and sys.argv
     sys.argv = [script_name, *(str(a) for a in script_args)]
     with open(dialog_file, 'w') as file:
-        def _input(prompt):
+        def _input(prompt = ''):
             file.write(prompt)
             response = input(prompt)
             file.write(f'<<{response}>>\n')
