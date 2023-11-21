@@ -20,6 +20,16 @@ def test_dialog_should_fail():
     """
 
 @dialog(
+    "dialogs/test_dialog_should_pass.txt",
+    "script_infinite_loop_fails.py", 'woot', 7, 'foobar'
+)
+@max_score(10)
+def test_infinite_loop_fail():
+    """
+    The test should fail due to an infinite loop
+    """
+
+@dialog(
     "dialogs/test_dialog_expects_more_input.txt",
     "script_for_dialog_passes.py", 'woot'
 )

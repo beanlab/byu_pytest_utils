@@ -2,6 +2,7 @@ import argparse
 import contextlib
 import os
 import re
+import multiprocessing
 import runpy
 import subprocess as sp
 import sys
@@ -312,14 +313,22 @@ class DialogChecker:
         # Intercept input, print, and sys.argv
         sys.argv = [script_name, *(str(a) for a in args)]
         _globals = {
-            'input': self._py_input,
-            'print': self._py_print,
-            'sys': sys
+            # 'input': self._py_input,
+            # 'print': self._py_print,
+            # 'sys.argv': sys.argv,
+            # 'sys': sys
         }
+
 
         # Run script as __main__
         try:
-            runpy.run_path(script_name, _globals, module)
+            proc = multiprocessing.Process(target=runpy.run_path, args=(script_name, _globals, module))
+            proc.start()
+            # Kill the script if it takes too long
+            timer = threading.Timer(4, proc.terminate)
+            timer.start()
+            proc.join()
+            timer.cancel()
 
             if output_file is not None:
                 if os.path.exists(output_file):
