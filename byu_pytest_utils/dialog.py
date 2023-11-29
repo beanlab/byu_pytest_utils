@@ -140,6 +140,7 @@ def _exec_read_stdout_with_timeout(p, timeout=_EXEC_DEFAULT_MAX_WAITTIME_BEFORE_
             yield queue.get_nowait()
 
 
+
 class DialogChecker:
     DEFAULT_GROUP = '.'
     DEFAULT_GROUP_NAME = 'everything-else'
@@ -309,23 +310,26 @@ class DialogChecker:
         res = sep.join(str(t) for t in values) + end
         self._consume_output(res)
 
+
     def run_script(self, script_name, *args, output_file=None, module='__main__'):
+        global myprint, myinput
+        myprint = self._py_print
+        myinput = self._py_input
         # Intercept input, print, and sys.argv
         sys.argv = [script_name, *(str(a) for a in args)]
         _globals = {
             # 'input': self._py_input,
-            # 'print': self._py_print,
-            # 'sys.argv': sys.argv,
+            'print': myprint,
+            'sys.argv': sys.argv.copy(),
             # 'sys': sys
         }
-
 
         # Run script as __main__
         try:
             proc = multiprocessing.Process(target=runpy.run_path, args=(script_name, _globals, module))
             proc.start()
             # Kill the script if it takes too long
-            timer = threading.Timer(4, proc.terminate)
+            timer = threading.Timer(6, proc.terminate)
             timer.start()
             proc.join()
             timer.cancel()
