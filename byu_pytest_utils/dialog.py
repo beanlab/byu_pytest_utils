@@ -311,7 +311,6 @@ class DialogChecker:
 
     def run_script(self, script_name, *args, output_file=None, module='__main__'):
         try:
-            finishes_on_time = False
             # Run the file in a separate, killable process
             proc = multiprocessing.Process(target=runpy.run_path,
                                            args=(script_name, {'sys.argv': sys.argv.copy()}, module))
@@ -319,12 +318,13 @@ class DialogChecker:
             # Kill the script if it takes too long
             timer = threading.Timer(6, proc.terminate)
             timer.start()
+
             # Wait for the process to finish
             proc.join()
             if timer.is_alive():
-                finishes_on_time = True
+                # Finished on time
                 timer.cancel()
-            if not finishes_on_time:
+            else:
                 raise Exception("Error: File did not finish. Check your while and for loops for infinite loops.")
 
             # Run the file again
