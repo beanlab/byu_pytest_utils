@@ -1,8 +1,5 @@
 import sys
 
-
-print("Not main")
-
 if __name__ == '__main__':
     print("My args:", sys.argv)
     list = [1, 2, 3]

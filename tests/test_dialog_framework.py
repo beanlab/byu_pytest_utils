@@ -27,6 +27,7 @@ def test_dialog_should_fail():
 def test_infinite_loop_should_fail():
     """
     The test should fail due to an infinite loop
+    There should be an error: "File did not finish. Check your while and for loops for infinite loops."
     """
 
 @dialog(
