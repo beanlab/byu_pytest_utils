@@ -140,7 +140,6 @@ def _exec_read_stdout_with_timeout(p, timeout=_EXEC_DEFAULT_MAX_WAITTIME_BEFORE_
             yield queue.get_nowait()
 
 
-
 class DialogChecker:
     DEFAULT_GROUP = '.'
     DEFAULT_GROUP_NAME = 'everything-else'
@@ -310,28 +309,17 @@ class DialogChecker:
         res = sep.join(str(t) for t in values) + end
         self._consume_output(res)
 
-
     def run_script(self, script_name, *args, output_file=None, module='__main__'):
-        global myprint, myinput
-        myprint = self._py_print
-        myinput = self._py_input
-        # Intercept input, print, and sys.argv
-        sys.argv = [script_name, *(str(a) for a in args)]
-        _globals = {
-            # 'input': self._py_input,
-            'print': myprint,
-            'sys.argv': sys.argv.copy(),
-            # 'sys': sys
-        }
-
-        # Run script as __main__
         try:
             finishes_on_time = False
-            proc = multiprocessing.Process(target=runpy.run_path, args=(script_name, _globals, module))
+            # Run the file in a separate, killable process
+            proc = multiprocessing.Process(target=runpy.run_path,
+                                           args=(script_name, {'sys.argv': sys.argv.copy()}, module))
             proc.start()
             # Kill the script if it takes too long
             timer = threading.Timer(6, proc.terminate)
             timer.start()
+            # Wait for the process to finish
             proc.join()
             if timer.is_alive():
                 finishes_on_time = True
@@ -339,7 +327,17 @@ class DialogChecker:
             if not finishes_on_time:
                 raise Exception("Error: File did not finish. Check your while and for loops for infinite loops.")
 
-            
+            # Run the file again
+            # Intercept input, print, and sys.argv
+            sys.argv = [script_name, *(str(a) for a in args)]
+            _globals = {
+                'input': self._py_input,
+                'print': self._py_print,
+                'sys': sys
+            }
+
+            # Run script as __main__
+            runpy.run_path(script_name, _globals, module)
 
             if output_file is not None:
                 if os.path.exists(output_file):

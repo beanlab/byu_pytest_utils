@@ -24,7 +24,7 @@ def test_dialog_should_fail():
     "script_infinite_loop_fails.py", 'woot', 7, 'foobar'
 )
 @max_score(10)
-def test_infinite_loop_fail():
+def test_infinite_loop_should_fail():
     """
     The test should fail due to an infinite loop
     """
