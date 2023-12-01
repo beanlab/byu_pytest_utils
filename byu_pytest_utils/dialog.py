@@ -1,8 +1,10 @@
 import argparse
+import asyncio
 import contextlib
 import os
 import re
 import runpy
+import subprocess
 import subprocess as sp
 import sys
 import threading
@@ -111,32 +113,71 @@ def dialog(dialog_file, script, *script_args, output_file=None):
     return _make_group_stats_decorator(group_stats)
 
 
-def _exec_enqueue_output(file, queue):
-    for line in iter(file.read1, b''):
-        queue.put(line.decode())
-    file.close()
+async def _read_stream(stream: asyncio.StreamReader, timeout: float):
+    """
+    Reads the stream until the end of the current content
+    Stops waiting for content after `timeout` seconds
+    Returns decoded content (i.e. str not bytes)
+    """
+    buffer = []
+
+    while True:
+        try:
+            token = await asyncio.wait_for(stream.read(1), timeout)
+            if not token:
+                # stream.read() returns an empty byte when EOF is reached
+                break
+            buffer.append(token.decode())
+
+        except asyncio.TimeoutError:
+            # No bytes have been written for at least `timeout` seconds
+            break
+
+    return ''.join(buffer)
 
 
-def _exec_read_stdout_with_timeout(p, timeout=_EXEC_DEFAULT_MAX_WAITTIME_BEFORE_INPUTTING):
-    with contextlib.ExitStack() as stack:
-        pool = stack.enter_context(ThreadPoolExecutor(1))
-        stack.callback(p.stdout.close)
+async def _run_exec_with_io(exec: list[str], inputs: list[str], read_timeout: float):
+    """
+    Run an executable. Provided content via STDIN. Capture STDOUT.
+    :param exec: executable and arguments
+    :param inputs: list of inputs to executable
+                   assumes newlines have been added if they are necessary
+    :param read_timeout: how long to wait after a byte is written to STDOUT before returning
+    :return: STDOUT of the executable so far (includes echoed inputs)
+    """
+    PIPE = asyncio.subprocess.PIPE
+    proc = await asyncio.create_subprocess_exec(
+        *exec, stdin=PIPE, stdout=PIPE, stderr=asyncio.subprocess.STDOUT)
 
-        queue = Queue()
-        pool.submit(_exec_enqueue_output, p.stdout, queue)
+    output = [await _read_stream(proc.stdout, read_timeout)]
+    error = ''
 
-        while p.poll() is None:
-            try:
-                yield queue.get(block=True, timeout=timeout)
-            except Empty:
-                # We need to check again because the program could have exited
-                # while we were waiting for input
-                if p.poll() is not None:
-                    break
-                yield None
+    for content in inputs:
+        if proc.returncode is not None:
+            # Process has completed
+            error = 'the program exited before all inputs were provided'
+            break
 
-        while queue.qsize() != 0:
-            yield queue.get_nowait()
+        output.append(content)
+        proc.stdin.write(content.encode())
+        await proc.stdin.drain()
+
+        response = await _read_stream(proc.stdout, read_timeout)
+
+        if not response:
+            # i.e. nothing has been written since we provided input
+            error = 'the program has been given input, but has not produced any new output'
+            break
+
+        output.append(response)
+
+    proc.stdin.close()
+
+    code = await proc.wait()
+    if code != 0:
+        error = f'the program returned a non-zero exit code: {code}'
+
+    return ''.join(output), error
 
 
 class DialogChecker:
@@ -338,17 +379,6 @@ class DialogChecker:
 
         return group_stats
 
-    def _exec_give_input(self, file, close_stdin_after_all_inputs_given, max_output_len):
-        if not self.inputs:
-            raise Exception(
-                "the program is blocked, which probably means that it's expecting an input; however, there's no input to give")
-        input_text = self.inputs.pop(0) + '\n'
-        self._consume_output(input_text, max_output_len)
-        file.write(input_text.encode())
-        file.flush()
-        if not self.inputs and close_stdin_after_all_inputs_given:
-            file.close()
-
     def run_exec(self, executable, *args, output_file=None,
                  close_stdin_after_all_inputs_given=False,
                  max_waittime_before_inputting=_EXEC_DEFAULT_MAX_WAITTIME_BEFORE_INPUTTING,
@@ -357,38 +387,9 @@ class DialogChecker:
                  max_output_len=_EXEC_DEFAULT_MAX_OUTPUT_LEN, **popen_args):
         args = [executable, *(str(a) for a in args)]
 
-        # We can't open the process with `text=True` because otherwise the
-        # `enqueue_output` thread would only be able to read line by line (which
-        # wouldn't work with an interactive program). By reading from stdout as
-        # bytes, we can consume everything that's currently there, even if it
-        # doesn't end with a \n character.
-        #
-        # This could cause problems if only part of a multi-byte character were
-        # put into the buffer. However, because the buffer will (I think) have
-        # to be flushed for the changes to be visible to `enqueue_output`, and
-        # since we should only be working with 1-byte ASCII characters anyways,
-        # I think this should be fine.
-        process = sp.Popen(args, stdin=sp.PIPE, stdout=sp.PIPE,
-                           stderr=sp.STDOUT, **popen_args)
-        time.sleep(warmup_time)
-        timer = threading.Timer(max_proc_exec_time, process.terminate)
-        timer.start()
-        already_gave_input = False
-        try:
-            for line in _exec_read_stdout_with_timeout(process, max_waittime_before_inputting):
-                if line is not None:
-                    already_gave_input = False
-                    self._consume_output(line, max_output_len)
-                    continue
-                if already_gave_input:
-                    if process.stdin.closed:
-                        break
-                    raise Exception(
-                        'the program has been given input, but has not produced any new output')
-                already_gave_input = True
-                self._exec_give_input(
-                    process.stdin, close_stdin_after_all_inputs_given, max_output_len)
+        output, error = asyncio.run(_run_exec_with_io(args, [c + '\n' for c in self.inputs], read_timeout=1))
 
+        try:
             if output_file is not None:
                 if os.path.exists(output_file):
                     with open(output_file) as file:
@@ -397,18 +398,11 @@ class DialogChecker:
                     group_stats = self._score_output(
                         f'File not found: {output_file}. Did you write it?')
             else:
-                group_stats = self._score_output(self.observed_output)
+                group_stats = self._score_output(output)
 
         except Exception as ex:
             exception = f'Exception: {ex}\n{traceback.format_exc()}'
             group_stats = self._score_output(exception)
-            process.terminate()
-
-        # Clean resources up
-        timer.cancel()
-        process.stdout.close()
-        process.stdin.close()
-        process.terminate()
 
         return group_stats
 
