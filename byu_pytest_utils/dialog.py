@@ -388,6 +388,8 @@ class DialogChecker:
         args = [executable, *(str(a) for a in args)]
 
         output, error = asyncio.run(_run_exec_with_io(args, [c + '\n' for c in self.inputs], read_timeout=1))
+        if error:
+            output += '\nError: ' + error
 
         try:
             if output_file is not None:
