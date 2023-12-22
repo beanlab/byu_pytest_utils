@@ -1,4 +1,4 @@
-from byu_pytest_utils import cache, dialog, dialog_exec
+from byu_pytest_utils import cache, dialog, dialog_exec, test_files
 
 
 @cache
@@ -8,11 +8,11 @@ def python_script():
     return 'hello_world.py'
 
 
-@dialog('dialogs/test_cached_asset.dialog.txt', python_script)
+@dialog(test_files / 'test_cached_asset.dialog.txt', python_script)
 def test_python_cached_asset():
     ...
 
 
-@dialog_exec('dialogs/test_cached_asset.dialog.txt', 'python3', python_script)
+@dialog_exec('test_files/test_cached_asset.dialog.txt', 'python3', python_script)
 def test_exec_cached_asset():
     ...

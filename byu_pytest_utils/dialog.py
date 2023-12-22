@@ -1,27 +1,23 @@
 import argparse
 import asyncio
-import contextlib
-import os
 import re
 import runpy
-import subprocess
 import subprocess as sp
 import sys
-import threading
-import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
+import warnings
 from functools import wraps
-from queue import Queue, Empty
 from pathlib import Path
-import os
+from typing import Union
 
 from byu_pytest_utils.edit_dist import edit_dist
 
-_EXEC_DEFAULT_MAX_WAITTIME_BEFORE_INPUTTING = 0.1
-_EXEC_DEFAULT_WARMUP_TIME = 0.5
-_EXEC_DEFAULT_MAX_PROC_EXEC_TIME = 10
-_EXEC_DEFAULT_MAX_OUTPUT_LEN = 2000
+DEFAULT_GROUP = '.'
+DEFAULT_GROUP_NAME = 'everything-else'
+MAX_PARTIAL_CREDIT = 1
+GAP = '~'
+
+PS = Union[Path, str]
 
 
 def _make_group_stats_decorator(group_stats):
@@ -47,71 +43,183 @@ def _ensure_absent(output_file):
         output_file.unlink(missing_ok=True)
 
 
-def dialog_exec(dialog_file, executable, *args, output_file=None,
-                close_stdin_after_all_inputs_given=False,
-                max_waittime_before_inputting=_EXEC_DEFAULT_MAX_WAITTIME_BEFORE_INPUTTING,
-                warmup_time=_EXEC_DEFAULT_WARMUP_TIME,
-                max_proc_exec_time=_EXEC_DEFAULT_MAX_PROC_EXEC_TIME,
-                max_output_len=_EXEC_DEFAULT_MAX_OUTPUT_LEN, **popen_args):
-    try:
-        # Ensure the output file isn't leftover from a previous run
-        _ensure_absent(output_file)
+def _extract_input(dialog_contents: str):
+    # Find all tokens delimited by << and >> and return them
+    # as a list along with the original contents with the << and >> removed
+    inputs = re.findall(r'<<(.*?)>>', dialog_contents, re.DOTALL)
+    dialog_contents = re.sub(
+        r'<<(.*?)>>', r'\1', dialog_contents, flags=re.DOTALL)
+    return inputs, dialog_contents
 
-        if callable(executable):
-            executable = executable()
 
-        args = [arg() if callable(arg) else arg for arg in args]
+def _extract_groups(dialog_contents: str):
+    # blah blah [[foo;name;10]] blah blah
 
-        # Run the script
-        group_stats = DialogChecker(dialog_file, echo_output=True) \
-            .run_exec(executable, *args, output_file=output_file,
-                      close_stdin_after_all_inputs_given=close_stdin_after_all_inputs_given,
-                      max_waittime_before_inputting=max_waittime_before_inputting,
-                      warmup_time=warmup_time,
-                      max_proc_exec_time=max_proc_exec_time,
-                      max_output_len=max_output_len, **popen_args)
+    group_weights = {DEFAULT_GROUP: 0}
+    group_names = {
+        DEFAULT_GROUP: DEFAULT_GROUP_NAME
+    }
 
-    except Exception as ex:
-        group_stats = {
-            'load-tests': {
-                'group_name': 'load-tests',
-                'expected': '',
-                'observed': traceback.format_exc(),
-                'score': 0,
-                'max_score': 1,
-                'passed': False,
-            }
+    group_sequence = ''
+
+    # Iterate through the dialog contents
+    # Characters not in a group are assigned to weight group 'a'
+    # Each weight group is assigned the next letter of the alphabet
+    # A group starts with [[ and ends with ]]
+    # The semicolon separates the group text from the weight
+    # All text in a group is assigned to the same weight group
+    # e.g.
+    # quux [[foo;test-foo;30]] bar [[baz;test-baz;20]] quux
+    # produces groups: aaaaabbbaaaacccaaaa
+    # and group_weights: {'-': 40, 'b': 30, 'c': 20}
+
+    i = 0
+    while i < len(dialog_contents):
+        if dialog_contents[i:i + 2] == '``':
+            # Start of a group
+            group_symbol = chr(ord('a') - 1 + len(group_weights))
+            group_match = re.search(
+                r'``(.*?);(.+?);(\d+?)``', dialog_contents[i:], flags=re.DOTALL)
+            group_text = group_match.group(1)
+            group_name = group_match.group(2)
+            group_names[group_symbol] = group_name
+            group_weights[group_symbol] = int(group_match.group(3))
+            group_sequence += group_symbol * len(group_text)
+            i += group_match.end()
+        else:
+            # Not in a group
+            group_sequence += DEFAULT_GROUP
+            i += 1
+    total = sum(group_weights.values())
+    if total > 100:
+        raise Exception('Group weights must add up to 100 or less')
+    group_weights[DEFAULT_GROUP] = 100 - total
+
+    # Then remove the groups from the dialog contents
+    dialog_contents = re.sub(
+        r'``(.*?);(.+?);(\d+?)``', r'\1', dialog_contents, flags=re.DOTALL)
+
+    return group_weights, group_names, group_sequence, dialog_contents
+
+
+def _score_observed_output(expected_output, observed_output):
+    group_weights, group_names, group_sequence, dialog_contents = _extract_groups(expected_output)
+
+    _, obs, exp = edit_dist(
+        observed_output,
+        dialog_contents,
+        GAP=GAP
+    )
+
+    # insert gaps (i.e. DEFAULT_GROUP) into self.groups to match exp
+    # then iterate over obs, exp, and groups
+    # to compute rate of matches per group
+    # (a gap in obs counts should use the prior group)
+    # and return the score for each group
+    # e.g. if groups is '---bbbcccc'
+    # and group_weights is {'-': 50, 'b': 20, 'c': 30}
+    # and exp is 'foobar~bazz'
+    # and obs is 'boobarflaz~'
+    # then groups should become '---bbbbcccc'
+
+    if len(exp) - exp.count(GAP) != len(group_sequence):
+        raise Exception('Too many gaps in expected output')
+
+    group_ids = ''
+    i = 0
+    g = 0
+    while i < len(exp):
+        if exp[i] == GAP:
+            group_ids += group_ids[-1] if group_ids else DEFAULT_GROUP
+            i += 1
+        else:
+            group_ids += group_sequence[g]
+            g += 1
+            i += 1
+    assert len(group_ids) == len(exp)
+
+    # Compute group scores
+    group_counts = {}
+    group_matches = {}
+    group_obs = {}
+    group_exp = {}
+    for obs_c, exp_c, group_id in zip(obs, exp, group_ids):
+        if obs_c == exp_c:
+            group_matches[group_id] = group_matches.get(group_id, 0) + 1
+        group_counts[group_id] = group_counts.get(group_id, 0) + 1
+        group_obs[group_id] = group_obs.get(group_id, '') + obs_c
+        group_exp[group_id] = group_exp.get(group_id, '') + exp_c
+
+    # Fix default group obs/exp
+    # Use the full output, and pad with spaces to 80 chars
+    def pad(text):
+        return text + ' ' * (80 - len(text))
+
+    group_obs[DEFAULT_GROUP] = pad(
+        obs.replace(GAP, ''))
+    group_exp[DEFAULT_GROUP] = pad(
+        exp.replace(GAP, ''))
+
+    group_stats = {}
+    for group_id, group_name in group_names.items():
+        if group_id not in group_counts:
+            # For example, the DEFAULT_GROUP sometimes has no hits
+            continue
+        group_max = group_weights[group_id] / 100
+        group_stats[group_name] = {
+            'group_name': group_name,
+            'expected': group_exp[group_id].replace(GAP, ''),
+            'observed': group_obs[group_id].replace(GAP, ''),
+            'score': group_matches.get(group_id, 0) / group_counts[group_id] * group_max,
+            'max_score': group_max,
+            'passed': group_matches.get(group_id, -1) == group_counts[group_id],
         }
 
-    return _make_group_stats_decorator(group_stats)
+    return group_stats
 
 
-def dialog(dialog_file, script, *script_args, output_file=None):
-    try:
-        # Ensure the output file isn't leftover from a previous run
-        _ensure_absent(output_file)
-        if callable(script):
-            script = script()
-        script_args = [arg() if callable(arg) else arg for arg in script_args]
+def _consolidate_stats(name, stats):
+    return {
+        'name': name,
+        'expected': stats['everything-else']['expected'].replace(GAP, ''),
+        'observed': stats['everything-else']['observed'].replace(GAP, ''),
+        'score': round(sum(group['score'] for group in stats.values()), 3),
+        'max_score': round(sum(group['max_score'] for group in stats.values()), 3),
+        'passed': all(group['passed'] for group in stats.values()),
+    }
 
-        # Run the script
-        group_stats = DialogChecker(dialog_file, echo_output=True) \
-            .run_script(script, *script_args, output_file=output_file)
 
-    except Exception as ex:
-        group_stats = {
-            'load-tests': {
-                'group_name': 'load-tests',
-                'expected': '',
-                'observed': traceback.format_exc(),
-                'score': 0,
-                'max_score': 1,
-                'passed': False,
-            }
-        }
+def _score_output(
+        expected_io: str, observed_io: str,
+        expected_files: list[tuple[Path, Path]]
+):
+    # ORIGINAL - per-group test results
+    # group_stats = {}
+    # group_stats.update({'stdout-' + k: v for k, v in _score_observed_output(expected_io, observed_io).items()})
+    # for exp_file, obs_file in expected_files:
+    #     if not obs_file.exists():
+    #         obs_content = f'File not found: {obs_file}. Did you write it?'
+    #     else:
+    #         obs_content = obs_file.read_text()
+    #     group_stats.update(
+    #         {exp_file.name + '-' + k: v for k, v in _score_observed_output(exp_file.read_text(), obs_content).items()})
+    #
+    # return group_stats
 
-    return _make_group_stats_decorator(group_stats)
+    group_stats = {}
+    if expected_io is not None:
+        stats = _score_observed_output(expected_io, observed_io)
+        group_stats['stdout'] = _consolidate_stats('stdout', stats)
 
+    for exp_file, obs_file in expected_files:
+        if not obs_file.exists():
+            obs_content = f'File not found: {obs_file}. Did you write it?'
+        else:
+            obs_content = obs_file.read_text()
+        stats = _score_observed_output(exp_file.read_text(), obs_content)
+        group_stats[exp_file.name] = _consolidate_stats(exp_file.name, stats)
+
+    return group_stats
 
 async def _read_stream(stream: asyncio.StreamReader, timeout: float):
     """
@@ -127,14 +235,14 @@ async def _read_stream(stream: asyncio.StreamReader, timeout: float):
             if not token:
                 # stream.read() returns an empty byte when EOF is reached
                 break
-            buffer.append(token.decode())
+            token = token.decode()
+            buffer.append(token)
 
         except asyncio.TimeoutError:
             # No bytes have been written for at least `timeout` seconds
             break
 
     return ''.join(buffer)
-
 
 async def _run_exec_with_io(exec: list[str], inputs: list[str], read_timeout: float):
     """
@@ -145,31 +253,41 @@ async def _run_exec_with_io(exec: list[str], inputs: list[str], read_timeout: fl
     :param read_timeout: how long to wait after a byte is written to STDOUT before returning
     :return: STDOUT of the executable so far (includes echoed inputs)
     """
+    print(' '.join(exec))
     PIPE = asyncio.subprocess.PIPE
     proc = await asyncio.create_subprocess_exec(
         *exec, stdin=PIPE, stdout=PIPE, stderr=asyncio.subprocess.STDOUT)
 
     output = [await _read_stream(proc.stdout, read_timeout)]
+    print(output[-1], end='')
     error = ''
 
-    for content in inputs:
+    for i in range(len(inputs)):
+        content = inputs[i]
         if proc.returncode is not None:
             # Process has completed
             error = 'the program exited before all inputs were provided'
             break
 
         output.append(content)
+        print(output[-1], end='')
         proc.stdin.write(content.encode())
         await proc.stdin.drain()
 
+        if i == len(inputs) - 1:
+            # close stdin
+            proc.stdin.close()
+
         response = await _read_stream(proc.stdout, read_timeout)
 
-        if not response:
+        if not response and proc.returncode is None:
             # i.e. nothing has been written since we provided input
+            # but the process hasn't returned yet
             error = 'the program has been given input, but has not produced any new output'
             break
 
         output.append(response)
+        print(output[-1], end='')
 
     proc.stdin.close()
 
@@ -179,235 +297,172 @@ async def _run_exec_with_io(exec: list[str], inputs: list[str], read_timeout: fl
 
     return ''.join(output), error
 
+def _run_exec(executable, *args, inputs=None, read_timeout=1):
+    args = [executable, *(str(a) for a in args)]
 
-class DialogChecker:
-    DEFAULT_GROUP = '.'
-    DEFAULT_GROUP_NAME = 'everything-else'
-    MAX_PARTIAL_CREDIT = 1
-    GAP = '~'
+    output, error = asyncio.run(_run_exec_with_io(
+        args, [c + '\n' for c in (inputs or [])],
+        read_timeout=read_timeout
+    ))
 
-    def __init__(self, dialog_file, echo_output):
-        self.echo_output = echo_output
+    if error:
+        output += '\nError: ' + error
 
-        with open(dialog_file) as file:
-            text = file.read()
-            self.inputs, no_inputs = self._extract_input(text)
-            self.group_weights, self.group_names, self.group_sequence, self.expected_output = \
-                self._extract_groups(no_inputs)
-        self.observed_output = ""
+    return output
 
-    @staticmethod
-    def _extract_input(dialogue_contents: str):
-        # Find all tokens delimited by << and >> and return them
-        # as a list along with the original contents with the << and >> removed
-        inputs = re.findall(r'<<(.*?)>>', dialogue_contents, re.DOTALL)
-        dialogue_contents = re.sub(
-            r'<<(.*?)>>', r'\1', dialogue_contents, flags=re.DOTALL)
-        return inputs, dialogue_contents
+def _run_script(
+        script_name, *args,
+        inputs: list[str] = None,
+        module='__main__',
+        echo_output=True
+):
+    if inputs is None:
+        inputs = []
 
-    @staticmethod
-    def _extract_groups(dialog_contents: str):
-        # blah blah [[foo;name;10]] blah blah
+    # Intercept input, print, and sys.argv
+    sys.argv = [script_name, *(str(a) for a in args)]
 
-        group_weights = {DialogChecker.DEFAULT_GROUP: 0}
-        group_names = {
-            DialogChecker.DEFAULT_GROUP: DialogChecker.DEFAULT_GROUP_NAME}
-
-        group_sequence = ''
-
-        # Iterate through the dialog contents
-        # Characters not in a group are assigned to weight group 'a'
-        # Each weight group is assigned the next letter of the alphabet
-        # A group starts with [[ and ends with ]]
-        # The semicolon separates the group text from the weight
-        # All text in a group is assigned to the same weight group
-        # e.g.
-        # quux [[foo;test-foo;30]] bar [[baz;test-baz;20]] quux
-        # produces groups: aaaaabbbaaaacccaaaa
-        # and group_weights: {'-': 40, 'b': 30, 'c': 20}
-
-        i = 0
-        while i < len(dialog_contents):
-            if dialog_contents[i:i + 2] == '``':
-                # Start of a group
-                group_symbol = chr(ord('a') - 1 + len(group_weights))
-                group_match = re.search(
-                    r'``(.*?);(.+?);(\d+?)``', dialog_contents[i:], flags=re.DOTALL)
-                group_text = group_match.group(1)
-                group_name = group_match.group(2)
-                group_names[group_symbol] = group_name
-                group_weights[group_symbol] = int(group_match.group(3))
-                group_sequence += group_symbol * len(group_text)
-                i += group_match.end()
-            else:
-                # Not in a group
-                group_sequence += DialogChecker.DEFAULT_GROUP
-                i += 1
-        total = sum(group_weights.values())
-        if total > 100:
-            raise Exception('Group weights must add up to 100 or less')
-        group_weights[DialogChecker.DEFAULT_GROUP] = 100 - total
-
-        # Then remove the groups from the dialog contents
-        dialog_contents = re.sub(
-            r'``(.*?);(.+?);(\d+?)``', r'\1', dialog_contents, flags=re.DOTALL)
-
-        return group_weights, group_names, group_sequence, dialog_contents
-
-    def _score_output(self, observed_output):
-        _, obs, exp = edit_dist(
-            observed_output,
-            self.expected_output,
-            GAP=DialogChecker.GAP
-        )
-
-        # insert gaps (i.e. DEFAULT_GROUP) into self.groups to match exp
-        # then iterate over obs, exp, and groups
-        # to compute rate of matches per group
-        # (a gap in obs counts should use the prior group)
-        # and return the score for each group
-        # e.g. if groups is '---bbbcccc'
-        # and group_weights is {'-': 50, 'b': 20, 'c': 30}
-        # and exp is 'foobar~bazz'
-        # and obs is 'boobarflaz~'
-        # then groups should become '---bbbbcccc'
-
-        if len(exp) - exp.count(DialogChecker.GAP) != len(self.group_sequence):
-            raise Exception('Too many gaps in expected output')
-
-        group_ids = ''
-        i = 0
-        g = 0
-        while i < len(exp):
-            if exp[i] == DialogChecker.GAP:
-                group_ids += group_ids[-1] if group_ids else DialogChecker.DEFAULT_GROUP
-                i += 1
-            else:
-                group_ids += self.group_sequence[g]
-                g += 1
-                i += 1
-        assert len(group_ids) == len(exp)
-
-        # Compute group scores
-        group_counts = {}
-        group_matches = {}
-        group_obs = {}
-        group_exp = {}
-        for obs_c, exp_c, group_id in zip(obs, exp, group_ids):
-            if obs_c == exp_c:
-                group_matches[group_id] = group_matches.get(group_id, 0) + 1
-            group_counts[group_id] = group_counts.get(group_id, 0) + 1
-            group_obs[group_id] = group_obs.get(group_id, '') + obs_c
-            group_exp[group_id] = group_exp.get(group_id, '') + exp_c
-
-        # Fix default group obs/exp
-        # Use the full output, and pad with spaces to 80 chars
-        def pad(text):
-            return text + ' ' * (80 - len(text))
-
-        group_obs[DialogChecker.DEFAULT_GROUP] = pad(
-            obs.replace(DialogChecker.GAP, ''))
-        group_exp[DialogChecker.DEFAULT_GROUP] = pad(
-            exp.replace(DialogChecker.GAP, ''))
-
-        group_stats = {}
-        for group_id, group_name in self.group_names.items():
-            group_max = self.group_weights[group_id] / 100
-            group_stats[group_name] = {
-                'group_name': group_name,
-                'expected': group_exp[group_id].replace(DialogChecker.GAP, ''),
-                'observed': group_obs[group_id].replace(DialogChecker.GAP, ''),
-                'score': group_matches.get(group_id, 0) / group_counts[group_id] * group_max,
-                'max_score': group_max,
-                'passed': group_matches.get(group_id, -1) == group_counts[group_id],
-            }
-
-        return group_stats
-
-    def _consume_output(self, printed_text, max_output_len=None):
-        self.observed_output += printed_text
-        if self.echo_output:
-            print(printed_text, end='')
-        if max_output_len is not None and len(self.observed_output) > max_output_len:
-            raise Exception('the program has printed too much text')
+    output_tokens = []
 
     @wraps(input)
-    def _py_input(self, prompt):
-        self._consume_output(prompt)
-        if not self.inputs:
+    def _py_input(prompt=''):
+        output_tokens.append(prompt)
+        if not inputs:
             raise Exception("input() called more times than expected")
-        input_text = self.inputs.pop(0)
-        self._consume_output(input_text + '\n')
-        if self.echo_output:
+        input_text = inputs.pop(0)
+        output_tokens.append(input_text + '\n')
+        if echo_output:
             print(input_text)
         return input_text
 
     @wraps(print)
-    def _py_print(self, *values, **kwargs):
+    def _py_print(*values, **kwargs):
         sep = kwargs.get('sep', ' ')
         end = kwargs.get('end', '\n')
         res = sep.join(str(t) for t in values) + end
-        self._consume_output(res)
+        output_tokens.append(res)
 
-    def run_script(self, script_name, *args, output_file=None, module='__main__'):
-        # Intercept input, print, and sys.argv
-        sys.argv = [script_name, *(str(a) for a in args)]
-        _globals = {
-            'input': self._py_input,
-            'print': self._py_print,
-            'sys': sys
+    _globals = {
+        'input': _py_input,
+        'print': _py_print,
+        'sys': sys
+    }
+
+    # Run script as __main__
+    try:
+        runpy.run_path(script_name, _globals, module)
+
+    except Exception as ex:
+        # get stack trace as string
+        output_tokens.append(f"\nException: {ex}\n{traceback.format_exc()}")
+
+    return ''.join(output_tokens)
+
+def _run_dialog(runner,
+                executable, *args,
+                expected_stdio: PS = None,
+                expected_files: list[tuple[PS, PS]] = None,
+                **kwargs) -> dict:
+    if expected_stdio is not None and not isinstance(expected_stdio, Path):
+        expected_stdio = Path(expected_stdio)
+
+    to_path = lambda f: Path(f) if not isinstance(f, Path) else f
+    expected_files = [
+        (to_path(ex), to_path(ob)) for ex, ob in (expected_files or [])
+    ]
+
+    try:
+        # Ensure the output files aren't leftover from a previous run
+        for _, obs_file in expected_files:
+            _ensure_absent(obs_file)
+
+        if callable(executable):
+            executable = executable()
+
+        args = [arg() if callable(arg) else arg for arg in args]
+
+        # Run the script
+        if expected_stdio is not None:
+            inputs, expected_io = _extract_input(expected_stdio.read_text())
+        else:
+            inputs = []
+            expected_io = None
+
+        output = runner(
+            executable, *args,
+            inputs=inputs, **kwargs
+        )
+
+        # Score results
+        group_stats = _score_output(
+            expected_io, output, expected_files
+        )
+
+    except Exception as ex:
+        group_stats = {
+            'load-tests': {
+                'group_name': 'load-tests',
+                'expected': '',
+                'observed': traceback.format_exc(),
+                'score': 0,
+                'max_score': 1,
+                'passed': False,
+            }
         }
 
-        # Run script as __main__
-        try:
-            runpy.run_path(script_name, _globals, module)
+    return group_stats
 
-            if output_file is not None:
-                if os.path.exists(output_file):
-                    with open(output_file) as output:
-                        group_stats = self._score_output(output.read())
-                else:
-                    group_stats = self._score_output(
-                        f"File not found: {output_file}. Did you write it?")
-            else:
-                group_stats = self._score_output(self.observed_output)
+def run_exec(executable, *args,
+             expected_stdio: PS = None,
+             expected_files: list[tuple[PS, PS]] = None,
+             read_timeout=1) -> dict:
+    return _run_dialog(
+        _run_exec, executable, *args,
+        expected_stdio=expected_stdio,
+        expected_files=expected_files,
+        read_timeout=read_timeout)
 
-        except Exception as ex:
-            # get stack trace as string
-            exception = f"Exception: {ex}\n{traceback.format_exc()}"
-            group_stats = self._score_output(exception)
+def run_script(script_name, *args,
+               expected_stdio: Path = None,
+               expected_files: list[tuple[Path, Path]] = None,
+               module='__main__',
+               echo_output=True
+               ) -> dict:
+    return _run_dialog(
+        _run_script, script_name, *args,
+        expected_stdio=expected_stdio,
+        expected_files=expected_files,
+        module=module, echo_output=echo_output)
 
-        return group_stats
+#
+# Deprecated
+#
 
-    def run_exec(self, executable, *args, output_file=None,
-                 close_stdin_after_all_inputs_given=False,
-                 max_waittime_before_inputting=_EXEC_DEFAULT_MAX_WAITTIME_BEFORE_INPUTTING,
-                 warmup_time=_EXEC_DEFAULT_WARMUP_TIME,
-                 max_proc_exec_time=_EXEC_DEFAULT_MAX_PROC_EXEC_TIME,
-                 max_output_len=_EXEC_DEFAULT_MAX_OUTPUT_LEN, **popen_args):
-        args = [executable, *(str(a) for a in args)]
+def dialog_exec(dialog_file, executable, *args, output_file=None,
+                read_timeout=1, **deprecated):
+    if deprecated:
+        for argument in deprecated:
+            warnings.warn(f'Argument {argument} is no longer supported')
 
-        output, error = asyncio.run(_run_exec_with_io(args, [c + '\n' for c in self.inputs], read_timeout=1))
-        if error:
-            output += '\nError: ' + error
+    if output_file is not None:
+        group_stats = run_exec(executable, *args,
+                               expected_files=[(dialog_file, output_file)],
+                               read_timeout=read_timeout)
+    else:
+        group_stats = run_exec(executable, *args,
+                               expected_stdio=dialog_file,
+                               read_timeout=read_timeout)
 
-        try:
-            if output_file is not None:
-                if os.path.exists(output_file):
-                    with open(output_file) as file:
-                        group_stats = self._score_output(file.read())
-                else:
-                    group_stats = self._score_output(
-                        f'File not found: {output_file}. Did you write it?')
-            else:
-                group_stats = self._score_output(output)
+    return _make_group_stats_decorator(group_stats)
 
-        except Exception as ex:
-            exception = f'Exception: {ex}\n{traceback.format_exc()}'
-            group_stats = self._score_output(exception)
+def dialog(dialog_file, script, *script_args, output_file=None):
+    if output_file is not None:
+        group_stats = run_script(script, *script_args,
+                                 expected_files=[(dialog_file, output_file)])
+    else:
+        group_stats = run_script(script, *script_args, expected_stdio=dialog_file)
 
-        return group_stats
-
+    return _make_group_stats_decorator(group_stats)
 
 def record_script(dialog_file, script_name, *script_args):
     # Intercept input, print, and sys.argv
@@ -434,8 +489,9 @@ def record_script(dialog_file, script_name, *script_args):
 
     return result
 
-
 def record_exec(dialog_file, executable, *args):
+    raise NotImplemented()
+
     args = [executable, *(str(a) for a in args)]
     with open(dialog_file, 'w') as file:
         process = sp.Popen(args, stdin=sp.PIPE,
@@ -449,7 +505,6 @@ def record_exec(dialog_file, executable, *args):
                 continue
             print(line, end='')
             file.write(line)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
