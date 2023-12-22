@@ -3,6 +3,7 @@ import asyncio
 import contextlib
 import os
 import re
+import multiprocessing
 import runpy
 import subprocess
 import subprocess as sp
@@ -350,16 +351,33 @@ class DialogChecker:
         self._consume_output(res)
 
     def run_script(self, script_name, *args, output_file=None, module='__main__'):
-        # Intercept input, print, and sys.argv
-        sys.argv = [script_name, *(str(a) for a in args)]
-        _globals = {
-            'input': self._py_input,
-            'print': self._py_print,
-            'sys': sys
-        }
-
-        # Run script as __main__
         try:
+            # Run the file in a separate, killable process
+            proc = multiprocessing.Process(target=runpy.run_path,
+                                           args=(script_name, {'sys.argv': sys.argv.copy()}, module))
+            proc.start()
+            # Kill the script if it takes too long
+            timer = threading.Timer(6, proc.terminate)
+            timer.start()
+
+            # Wait for the process to finish
+            proc.join()
+            if timer.is_alive():
+                # Finished on time
+                timer.cancel()
+            else:
+                raise Exception("Error: File did not finish. Check your while and for loops for infinite loops.")
+
+            # Run the file again
+            # Intercept input, print, and sys.argv
+            sys.argv = [script_name, *(str(a) for a in args)]
+            _globals = {
+                'input': self._py_input,
+                'print': self._py_print,
+                'sys': sys
+            }
+
+            # Run script as __main__
             runpy.run_path(script_name, _globals, module)
 
             if output_file is not None:

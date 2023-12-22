@@ -20,6 +20,17 @@ def test_dialog_should_fail():
     """
 
 @dialog(
+    "dialogs/test_dialog_should_pass.txt",
+    "script_infinite_loop_fails.py", 'woot', 7, 'foobar'
+)
+@max_score(10)
+def test_infinite_loop_should_fail():
+    """
+    The test should fail due to an infinite loop
+    There should be an error: "File did not finish. Check your while and for loops for infinite loops."
+    """
+
+@dialog(
     "dialogs/test_dialog_expects_more_input.txt",
     "script_for_dialog_passes.py", 'woot'
 )
