@@ -45,7 +45,7 @@ def diff_outputs(left: str, right: str):
         'Observed (left) == Expected (right)',
         *(l + ' | ' + r for l, r in zip(left_view_lines, right_view_lines))
     ]
-    return diff_view
+    return '\n'.join(diff_view)
 
 
 def format_results_for_gradescope(test_results):
