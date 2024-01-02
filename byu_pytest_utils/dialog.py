@@ -280,12 +280,6 @@ async def _run_exec_with_io(exec: list[str], inputs: list[str], read_timeout: fl
 
         response = await _read_stream(proc.stdout, read_timeout)
 
-        if not response and proc.returncode is None:
-            # i.e. nothing has been written since we provided input
-            # but the process hasn't returned yet
-            error = 'the program has been given input, but has not produced any new output'
-            break
-
         output.append(response)
         print(output[-1], end='')
 
