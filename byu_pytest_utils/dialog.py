@@ -285,9 +285,12 @@ async def _run_exec_with_io(exec: list[str], inputs: list[str], read_timeout: fl
 
     proc.stdin.close()
 
-    code = await proc.wait()
-    if code != 0:
-        error = f'the program returned a non-zero exit code: {code}'
+    try:
+        code = await asyncio.wait_for(proc.wait(), 60)  # give the program a minute to finish
+        if code != 0:
+            error = f'the program returned a non-zero exit code: {code}'
+    except TimeoutError:
+        error = 'the program failed to finish in the expected amount of time; do you have an infinite loop?'
 
     return ''.join(output), error
 
