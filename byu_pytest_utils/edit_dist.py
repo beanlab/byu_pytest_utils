@@ -9,7 +9,7 @@ def edit_dist(
         SUB=-1,
         GAP_OPEN=-3,
         GAP_EXTEND=-1
-):
+) -> tuple[float, str, str]:
     """
     Align seq1 against seq2 using Needleman-Wunsch
     Put seq1 on left (j) and seq2 on top (i)
