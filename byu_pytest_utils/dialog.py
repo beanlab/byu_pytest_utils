@@ -221,6 +221,7 @@ def _score_output(
 
     return group_stats
 
+
 async def _read_stream(stream: asyncio.StreamReader, timeout: float):
     """
     Reads the stream until the end of the current content
@@ -244,29 +245,60 @@ async def _read_stream(stream: asyncio.StreamReader, timeout: float):
 
     return ''.join(buffer)
 
-async def _run_exec_with_io(exec: list[str], inputs: list[str], read_timeout: float):
+
+async def _run_with_timeout(waitable, timeout):
+    fut = asyncio.Future()
+
+    t1 = asyncio.create_task(waitable)
+    t2 = asyncio.create_task(asyncio.sleep(timeout))
+
+    def _timeout(t):
+        fut.set_exception(TimeoutError)
+
+    t2.add_done_callback(_timeout)
+    t1.add_done_callback(lambda t: t2.remove_done_callback(_timeout) and fut.set_result(t.result))
+
+    return await fut
+
+
+async def _run_exec_with_io(
+        exec: list[str],
+        inputs: list[str],
+        read_timeout: float,
+        finish_timeout: float
+) -> tuple[str, str]:
     """
     Run an executable. Provided content via STDIN. Capture STDOUT.
     :param exec: executable and arguments
     :param inputs: list of inputs to executable
                    assumes newlines have been added if they are necessary
     :param read_timeout: how long to wait after a byte is written to STDOUT before returning
-    :return: STDOUT of the executable so far (includes echoed inputs)
+    :return: Nothing. But output and error will be populated when finished.
     """
+    output = []
+    error = []
+
     print(' '.join(exec))
     PIPE = asyncio.subprocess.PIPE
     proc = await asyncio.create_subprocess_exec(
         *exec, stdin=PIPE, stdout=PIPE, stderr=asyncio.subprocess.STDOUT)
 
-    output = [await _read_stream(proc.stdout, read_timeout)]
+    timeout_task = asyncio.create_task(asyncio.sleep(finish_timeout))
+
+    def kill(t):
+        error.append('The program failed to finish in the expected amount of time; do you have an infinite loop?\n')
+        proc.kill()
+
+    timeout_task.add_done_callback(kill)
+
+    output.append(await _read_stream(proc.stdout, read_timeout))
     print(output[-1], end='')
-    error = ''
 
     for i in range(len(inputs)):
         content = inputs[i]
         if proc.returncode is not None:
             # Process has completed
-            error = 'the program exited before all inputs were provided'
+            error.append('The program exited before all inputs were provided\n')
             break
 
         output.append(content)
@@ -285,27 +317,29 @@ async def _run_exec_with_io(exec: list[str], inputs: list[str], read_timeout: fl
 
     proc.stdin.close()
 
-    try:
-        code = await asyncio.wait_for(proc.wait(), 60)  # give the program a minute to finish
-        if code != 0:
-            error = f'the program returned a non-zero exit code: {code}'
-    except TimeoutError:
-        error = 'the program failed to finish in the expected amount of time; do you have an infinite loop?'
+    code = await proc.wait()
+    timeout_task.remove_done_callback(kill)
+    timeout_task.cancel()
 
-    return ''.join(output), error
+    if code != 0:
+        error.append(f'The program returned a non-zero exit code: {code}\n')
 
-def _run_exec(executable, *args, inputs=None, read_timeout=1):
+    return ''.join(output), ''.join(error)
+
+
+def _run_exec(executable, *args, inputs=None, read_timeout=1, run_timeout=60):
     args = [executable, *(str(a) for a in args)]
 
     output, error = asyncio.run(_run_exec_with_io(
         args, [c + '\n' for c in (inputs or [])],
-        read_timeout=read_timeout
+        read_timeout=read_timeout, finish_timeout=run_timeout
     ))
 
     if error:
         output += '\nError: ' + error
 
     return output
+
 
 def _run_script(
         script_name, *args,
@@ -354,6 +388,7 @@ def _run_script(
         output_tokens.append(f"\nException: {ex}\n{traceback.format_exc()}")
 
     return ''.join(output_tokens)
+
 
 def _run_dialog(runner,
                 executable, *args,
@@ -409,6 +444,7 @@ def _run_dialog(runner,
 
     return group_stats
 
+
 def run_exec(executable, *args,
              expected_stdio: PS = None,
              expected_files: list[tuple[PS, PS]] = None,
@@ -418,6 +454,7 @@ def run_exec(executable, *args,
         expected_stdio=expected_stdio,
         expected_files=expected_files,
         read_timeout=read_timeout)
+
 
 def run_script(script_name, *args,
                expected_stdio: Path = None,
@@ -430,6 +467,7 @@ def run_script(script_name, *args,
         expected_stdio=expected_stdio,
         expected_files=expected_files,
         module=module, echo_output=echo_output)
+
 
 #
 # Deprecated
@@ -452,6 +490,7 @@ def dialog_exec(dialog_file, executable, *args, output_file=None,
 
     return _make_group_stats_decorator(group_stats)
 
+
 def dialog(dialog_file, script, *script_args, output_file=None):
     if output_file is not None:
         group_stats = run_script(script, *script_args,
@@ -460,6 +499,7 @@ def dialog(dialog_file, script, *script_args, output_file=None):
         group_stats = run_script(script, *script_args, expected_stdio=dialog_file)
 
     return _make_group_stats_decorator(group_stats)
+
 
 def record_script(dialog_file, script_name, *script_args):
     # Intercept input, print, and sys.argv
@@ -486,6 +526,7 @@ def record_script(dialog_file, script_name, *script_args):
 
     return result
 
+
 def record_exec(dialog_file, executable, *args):
     raise NotImplemented()
 
@@ -502,6 +543,7 @@ def record_exec(dialog_file, executable, *args):
                 continue
             print(line, end='')
             file.write(line)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
