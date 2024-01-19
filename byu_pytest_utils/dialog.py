@@ -222,7 +222,7 @@ def _score_output(
     return group_stats
 
 
-async def _read_stream(stream: asyncio.StreamReader, timeout: float):
+async def _read_stream(stream: asyncio.StreamReader, timeout: float, output_limit: int):
     """
     Reads the stream until the end of the current content
     Stops waiting for content after `timeout` seconds
@@ -238,6 +238,8 @@ async def _read_stream(stream: asyncio.StreamReader, timeout: float):
                 break
             token = token.decode()
             buffer.append(token)
+            if len(buffer) > output_limit:
+                break
 
         except asyncio.TimeoutError:
             # No bytes have been written for at least `timeout` seconds
@@ -265,7 +267,8 @@ async def _run_exec_with_io(
         exec: list[str],
         inputs: list[str],
         read_timeout: float,
-        finish_timeout: float
+        finish_timeout: float,
+        max_output_size: int = 10000
 ) -> tuple[str, str]:
     """
     Run an executable. Provided content via STDIN. Capture STDOUT.
@@ -275,6 +278,7 @@ async def _run_exec_with_io(
     :param read_timeout: how long to wait after a byte is written to STDOUT before returning
     :return: Nothing. But output and error will be populated when finished.
     """
+    output_size = 0
     output = []
     error = []
 
@@ -286,23 +290,30 @@ async def _run_exec_with_io(
     timeout_task = asyncio.create_task(asyncio.sleep(finish_timeout))
 
     def kill(t):
-        error.append('The program failed to finish in the expected amount of time; do you have an infinite loop?\n')
+        error.append('The program failed to finish in the expected amount of time; do you have an infinite loop?')
         proc.kill()
 
     timeout_task.add_done_callback(kill)
 
-    output.append(await _read_stream(proc.stdout, read_timeout))
+    output.append(await _read_stream(proc.stdout, read_timeout, max_output_size - output_size))
+    output_size += len(output[-1])
     print(output[-1], end='')
+    if output_size > max_output_size:
+        error.append(f'Program output exceeded limit of {max_output_size} characters')
+        proc.kill()
+        inputs = []  # i.e. skip the input loop and cut to the finish
 
     for i in range(len(inputs)):
         content = inputs[i]
         if proc.returncode is not None:
             # Process has completed
-            error.append('The program exited before all inputs were provided\n')
+            error.append('The program exited before all inputs were provided')
             break
 
         output.append(content)
+        output_size += len(output[-1])
         print(output[-1], end='')
+
         proc.stdin.write(content.encode())
         await proc.stdin.drain()
 
@@ -310,21 +321,26 @@ async def _run_exec_with_io(
             # close stdin
             proc.stdin.close()
 
-        response = await _read_stream(proc.stdout, read_timeout)
+        response = await _read_stream(proc.stdout, read_timeout, max_output_size - output_size)
 
         output.append(response)
+        output_size += len(output[-1])
         print(output[-1], end='')
+        if output_size > max_output_size:
+            error.append(f'Program output exceeded limit of {max_output_size} characters')
+            proc.kill()
+            break
 
     proc.stdin.close()
-
     code = await proc.wait()
+
     timeout_task.remove_done_callback(kill)
     timeout_task.cancel()
 
     if code != 0:
-        error.append(f'The program returned a non-zero exit code: {code}\n')
+        error.append(f'The program returned a non-zero exit code: {code}')
 
-    return ''.join(output), ''.join(error)
+    return ''.join(output), '\n'.join(error)
 
 
 def _run_exec(executable, *args, inputs=None, read_timeout=1, run_timeout=60):
