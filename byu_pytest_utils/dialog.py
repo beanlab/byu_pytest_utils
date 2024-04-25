@@ -213,7 +213,7 @@ def _score_output(
 
     for exp_file, obs_file in expected_files:
         if not obs_file.exists():
-            obs_content = f'File not found: {obs_file}. Did you write it?'
+            obs_content = f'File not found: {obs_file}. Did you write it?\n' + observed_io
         else:
             obs_content = obs_file.read_text()
         stats = _score_observed_output(exp_file.read_text(), obs_content)
