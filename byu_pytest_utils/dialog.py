@@ -213,7 +213,7 @@ def _score_output(
 
     for exp_file, obs_file in expected_files:
         if not obs_file.exists():
-            obs_content = f'File not found: {obs_file}. Did you write it?'
+            obs_content = f'File not found: {obs_file}. Did you write it?\n' + observed_io
         else:
             obs_content = obs_file.read_text()
         stats = _score_observed_output(exp_file.read_text(), obs_content)
@@ -401,8 +401,16 @@ def _run_script(
 
     except Exception as ex:
         # get stack trace as string
-        output_tokens.append(f"\nException: {ex}\n{traceback.format_exc()}")
-
+        stack_trace = traceback.format_exc().split('\n')
+        # Find index of first line that contains the script name
+        index = 0
+        for i, line in enumerate(stack_trace):
+            if script_name in line:
+                index = i
+                break
+        stack_trace = "\n".join(stack_trace[index:])
+        output_tokens.append(f"\nException: {ex}\n{stack_trace}")
+        
     return ''.join(output_tokens)
 
 
