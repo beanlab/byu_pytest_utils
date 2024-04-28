@@ -374,7 +374,7 @@ def _run_script(
 
         output, error = asyncio.run(_run_exec_with_io(
             args, [c + '\n' for c in (inputs or [])],
-            read_timeout=1, finish_timeout=4
+            read_timeout=0.25, finish_timeout=8
         ))
 
         if error:  # Do nothing with the error output for now
