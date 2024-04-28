@@ -276,7 +276,7 @@ async def _run_exec_with_io(
     :param inputs: list of inputs to executable
                    assumes newlines have been added if they are necessary
     :param read_timeout: how long to wait after a byte is written to STDOUT before returning
-    :return: Nothing. But output and error will be populated when finished.
+    :return: tuple of (output, error)
     """
     output_size = 0
     output = []
@@ -366,38 +366,20 @@ def _run_script(
     if inputs is None:
         inputs = []
 
-    # Intercept input, print, and sys.argv
-    sys.argv = [script_name, *(str(a) for a in args)]
-
     output_tokens = []
-
-    @wraps(input)
-    def _py_input(prompt=''):
-        output_tokens.append(prompt)
-        if not inputs:
-            raise Exception("input() called more times than expected")
-        input_text = inputs.pop(0)
-        output_tokens.append(input_text + '\n')
-        if echo_output:
-            print(input_text)
-        return input_text
-
-    @wraps(print)
-    def _py_print(*values, **kwargs):
-        sep = kwargs.get('sep', ' ')
-        end = kwargs.get('end', '\n')
-        res = sep.join(str(t) for t in values) + end
-        output_tokens.append(res)
-
-    _globals = {
-        'input': _py_input,
-        'print': _py_print,
-        'sys': sys
-    }
 
     # Run script as __main__
     try:
-        runpy.run_path(script_name, _globals, module)
+        args = ["python3", script_name, *(str(a) for a in args)]
+
+        output, error = asyncio.run(_run_exec_with_io(
+            args, [c + '\n' for c in (inputs or [])],
+            read_timeout=1, finish_timeout=4
+        ))
+
+        if error:  # Do nothing with the error output for now
+            pass
+        output_tokens.append(output)
 
     except Exception as ex:
         # get stack trace as string
@@ -410,7 +392,7 @@ def _run_script(
                 break
         stack_trace = "\n".join(stack_trace[index:])
         output_tokens.append(f"\nException: {ex}\n{stack_trace}")
-        
+
     return ''.join(output_tokens)
 
 
