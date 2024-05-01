@@ -6,6 +6,7 @@ import subprocess as sp
 import sys
 import traceback
 import warnings
+from asyncio.subprocess import Process
 from functools import wraps
 from pathlib import Path
 from typing import Union
@@ -357,8 +358,21 @@ def _run_exec(executable, *args, inputs=None, read_timeout=1, run_timeout=60):
     return output
 
 
+async def _run_worker(script_name: str, *args, inputs=None, read_timeout=1, run_timeout=60):
+    sys.argv = ["worker.py", script_name, *(str(a) for a in args)]
+
+    output, error = asyncio.run(_run_exec_with_io(
+        args, [c + '\n' for c in (inputs or [])],
+        read_timeout=read_timeout, finish_timeout=run_timeout
+    ))
+
+    if error:
+        output += '\nError: ' + error
+
+    return output
+
 def _run_script(
-        script_name, *args,
+        script_name: str, *args,
         inputs: list[str] = None,
         module='__main__',
         echo_output=True
@@ -366,52 +380,12 @@ def _run_script(
     if inputs is None:
         inputs = []
 
-    # Intercept input, print, and sys.argv
-    sys.argv = [script_name, *(str(a) for a in args)]
+    output, error = asyncio.run(_run_worker(script_name, *args, inputs=inputs))
 
-    output_tokens = []
+    if error:
+        output += '\nError: ' + error
 
-    @wraps(input)
-    def _py_input(prompt=''):
-        output_tokens.append(prompt)
-        if not inputs:
-            raise Exception("input() called more times than expected")
-        input_text = inputs.pop(0)
-        output_tokens.append(input_text + '\n')
-        if echo_output:
-            print(input_text)
-        return input_text
-
-    @wraps(print)
-    def _py_print(*values, **kwargs):
-        sep = kwargs.get('sep', ' ')
-        end = kwargs.get('end', '\n')
-        res = sep.join(str(t) for t in values) + end
-        output_tokens.append(res)
-
-    _globals = {
-        'input': _py_input,
-        'print': _py_print,
-        'sys': sys
-    }
-
-    # Run script as __main__
-    try:
-        runpy.run_path(script_name, _globals, module)
-
-    except Exception as ex:
-        # get stack trace as string
-        stack_trace = traceback.format_exc().split('\n')
-        # Find index of first line that contains the script name
-        index = 0
-        for i, line in enumerate(stack_trace):
-            if script_name in line:
-                index = i
-                break
-        stack_trace = "\n".join(stack_trace[index:])
-        output_tokens.append(f"\nException: {ex}\n{stack_trace}")
-        
-    return ''.join(output_tokens)
+    return output
 
 
 def _run_dialog(runner,
