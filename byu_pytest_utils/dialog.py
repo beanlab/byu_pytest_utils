@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import os
 import re
 import runpy
 import subprocess as sp
@@ -358,18 +359,57 @@ def _run_exec(executable, *args, inputs=None, read_timeout=1, run_timeout=60):
     return output
 
 
-async def _run_worker(script_name: str, *args, inputs=None, read_timeout=1, run_timeout=60):
-    sys.argv = ["worker.py", script_name, *(str(a) for a in args)]
+async def _run_worker(
+        script_name: str,
+        *args,
+        inputs: list[str] = None,
+        read_timeout=1,
+        run_timeout=60,
+        max_output_size: int = 10000):
 
-    output, error = asyncio.run(_run_exec_with_io(
-        args, [c + '\n' for c in (inputs or [])],
-        read_timeout=read_timeout, finish_timeout=run_timeout
-    ))
+    path_to_worker = Path(__file__).parent / 'worker.py'
 
-    if error:
-        output += '\nError: ' + error
+    exec = ['python', str(path_to_worker), script_name, *(str(a) for a in args)]
 
-    return output
+    # Create a new environment dictionary
+    env = os.environ.copy()
+    env.update({"INPUTS": '\n'.join(inputs) + '\n'})
+
+    output_size = 0
+    output = []
+    error = []
+
+    print(' '.join(exec))
+    PIPE = asyncio.subprocess.PIPE
+    proc = await asyncio.create_subprocess_exec(
+        *exec, stdin=PIPE, stdout=PIPE, stderr=asyncio.subprocess.STDOUT, env=env)
+
+    timeout_task = asyncio.create_task(asyncio.sleep(run_timeout))
+
+    def kill(t):
+        error.append('The program failed to finish in the expected amount of time; do you have an infinite loop?')
+        proc.kill()
+
+    timeout_task.add_done_callback(kill)
+
+    output.append(await _read_stream(proc.stdout, read_timeout, max_output_size - output_size))
+    output_size += len(output[-1])
+    print(output[-1], end='')
+    if output_size > max_output_size:
+        error.append(f'Program output exceeded limit of {max_output_size} characters')
+        proc.kill()
+
+    proc.stdin.close()
+    code = await proc.wait()
+
+    timeout_task.remove_done_callback(kill)
+    timeout_task.cancel()
+
+    if code != 0:
+        error.append(f'The program returned a non-zero exit code: {code}')
+
+    return output, "\n".join(error)
+
 
 def _run_script(
         script_name: str, *args,
@@ -551,9 +591,9 @@ if __name__ == '__main__':
                         help='Arguments (if any) to the Python script or executable')
     parser.add_argument('-e', '--exec', action='store_true',
                         help='Interpret `to_run` as an executable instead of a Python script')
-    args = parser.parse_args()
+    parsed_args = parser.parse_args()
 
-    if args.exec:
-        record_exec(args.dialog_file, args.to_run, *args.args)
+    if parsed_args.exec:
+        record_exec(parsed_args.dialog_file, parsed_args.to_run, *parsed_args.args)
     else:
-        record_script(args.dialog_file, args.to_run, *args.args)
+        record_script(parsed_args.dialog_file, parsed_args.to_run, *parsed_args.args)

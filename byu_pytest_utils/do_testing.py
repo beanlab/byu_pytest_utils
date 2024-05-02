@@ -16,7 +16,7 @@ async def worker(exec, inputs):
 
     # Read the output from the worker program
     output = await proc.stdout.read()
-    error = await
+    error = await proc.stderr.read()
     await proc.wait()
 
     print(output.decode())
