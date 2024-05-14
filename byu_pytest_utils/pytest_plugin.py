@@ -83,7 +83,11 @@ def pytest_terminal_summary(terminalreporter, exitstatus):
 
     for s in all_tests:
         output = s.capstdout + '\n' + s.capstderr
-        group_stats = test_group_stats[s.nodeid]
+        # The group stats key is the name of the test (eg test_lab08.py::test_get_and_set)
+        # However s.nodeid includes the full relative path to test (causing Key Error)
+        # The following line takes that rel path from s.nodeid and extracts just filename
+        group_stats_key = s.nodeid.split('/')[-1]
+        group_stats = test_group_stats[group_stats_key]
 
         max_score = group_stats['max_score']
         score = group_stats.get('score', max_score if s.passed else 0)
@@ -94,7 +98,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus):
             {
                 'score': round(score, 4),
                 'max_score': round(max_score, 4),
-                'name': s.nodeid,
+                'name': group_stats_key,
                 'output': output,
                 'visibility': 'visible',
             }
