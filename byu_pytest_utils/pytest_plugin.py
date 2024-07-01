@@ -1,11 +1,104 @@
+import re
+
 import pytest
 import json
+import diff_match_patch as dmp_module
+import pytest_html
+from bs4 import BeautifulSoup
+# pip install diff-match-patch-python
+# pip install diff-match-patch
+from pytest_html.hooks import pytest_html_results_table_html
+
 
 metadata = {}
 test_group_stats = {}
 
 MIN_LINES_DIFF = 3
 
+import pytest_html
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    extras = getattr(report, "extras", [])
+    if report.when == "call":
+        # always add url to report
+        extras.append(pytest_html.extras.url("http://www.example.com/"))
+        xfail = hasattr(report, "wasxfail")
+        if (report.skipped and xfail) or (report.failed and not xfail):
+            # only add additional html on failure
+            extras.append(pytest_html.extras.html("<div>Additional HTML</div>"))
+        report.extras = extras
+
+
+#
+# def pytest_html_results_table_row(report, cells):
+#     print(f"\nreport:\n{report}\n\n\n cells {cells}\n\n")
+#     if report.failed:
+#         del cells[:]
+
+
+def pytest_html_results_table_html(report, data):
+    xfail = hasattr(report, "wasxfail")
+    # (report.skipped and xfail) or (report.failed and not xfail):
+    if report.failed:
+        for i in range(len(data)):
+            line = data[i]
+            # Find the assertion expressions
+            print(line)
+            pattern = r"AssertionError: assert &#x27;([^&#x27;]*)&#x27; == &#x27;([^&#x27;]*)&#x27;"
+
+            match = re.search(pattern, line)
+
+            if not match:
+                continue
+
+            left = match.group(1)
+            right = match.group(2)
+            print(f"Placeholder 1: {left}")
+            print(f"Placeholder 2: {right}")
+            dmp = dmp_module.diff_match_patch()
+            diffs = dmp.diff_main(left, right)
+            html = dmp.diff_prettyHtml(diffs)
+            data[i] = html
+
+
+
+
+def html_to_ansi(html):
+    # ANSI escape code mapping
+    html_to_ansi = {
+        "#ffe6e6": "\033[41m",  # Red background
+        "#e6ffe6": "\033[42m",  # Green background
+        "reset": "\033[0m"  # Reset
+    }
+
+    # Parse HTML
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Function to convert HTML to ANSI text
+    def html_to_ansi_text(soup):
+        ansi_text = ""
+        for elem in soup.descendants:
+            if elem.name == "span":
+                ansi_text += elem.get_text()
+            elif elem.name == "del":
+                color_code = html_to_ansi.get(elem.get("style")[12:19], "")
+                ansi_text += f"{color_code}{elem.get_text()}{html_to_ansi['reset']}"
+            elif elem.name == "ins":
+                color_code = html_to_ansi.get(elem.get("style")[12:19], "")
+                ansi_text += f"{color_code}{elem.get_text()}{html_to_ansi['reset']}"
+            elif elem.name == "br":
+                ansi_text += "\n"
+            elif elem.name == "para":
+                ansi_text += "¶"
+        return ansi_text
+
+    # Convert HTML to ANSI text
+    ansi_output = html_to_ansi_text(soup)
+    return ansi_output
 
 def pytest_assertrepr_compare(config, op, left, right):
     if op == '==' \
