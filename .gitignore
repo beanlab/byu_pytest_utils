@@ -4,3 +4,5 @@ dist/
 __pycache__/
 *.observed.txt
 .DS*
+tests/assets/style.css
+tests/results.json
