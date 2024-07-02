@@ -5,10 +5,8 @@ import json
 import diff_match_patch as dmp_module
 import pytest_html
 from bs4 import BeautifulSoup
-# pip install diff-match-patch-python
-# pip install diff-match-patch
 from pytest_html.hooks import pytest_html_results_table_html
-
+from html2text import html2text
 
 metadata = {}
 test_group_stats = {}
@@ -56,13 +54,14 @@ def diff_prettyHtml(diffs):
             data.replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
-            .replace("\n", "&para;<br>")
+            .replace("\n", "<br>")
         )
 
         if op == dmp.DIFF_INSERT:
-            html.append('<ins style="background:#e6ffe6;">%s</ins>' % text)
+            html.append('<span style="background:#e6ffe6;">%s</span>' % text)
         elif op == dmp.DIFF_DELETE:
-            html.append('<del style="background:#ffe6e6;">%s</del>' % text)
+            pass
+            # html.append('<del style="background:#ffe6e6;">%s</del>' % text)
         elif op == dmp.DIFF_EQUAL:
             html.append("<span>%s</span>" % text)
     return "".join(html)
@@ -80,18 +79,23 @@ def pytest_html_results_table_html(report, data: list[str]):
 
     if "assert" in text and (match := re.search(pattern, text, flags=re.MULTILINE)):
         data.clear()
-        left = match.group(1)
-        right = match.group(2)
-        print(f"Placeholder 1: {left}")
-        print(f"Placeholder 2: {right}")
+        left = html2text(match.group(1))
+        right = html2text(match.group(2))
         dmp = dmp_module.diff_match_patch()
-        diffs = dmp.diff_main(left, right)
-        html = diff_prettyHtml(diffs)
-        data.append(html)
-        print(html)
+        right_diff = dmp.diff_main(right, left)
+        right_html = diff_prettyHtml(right_diff)
+        left_diff = dmp.diff_main(left, right)
+        left_html = diff_prettyHtml(left_diff)
+        new_html = (f'<div style="max-width: 45%; float: left; margin: 2%;">'
+                    f'<h1> Old </h1>'
+                    f'{left_html}'
+                    f'</div>'
+                    f'<div style="max-width: 45%; float: left; margin: 2%;">'
+                    f'<h1> New </h1>'
+                    f'{right_html}'
+                    f'</div>')
+        data.append(new_html)
         print("Data" * 7 + f"{data}")
-
-
 
 
 def html_to_ansi(html):
@@ -126,6 +130,7 @@ def html_to_ansi(html):
     # Convert HTML to ANSI text
     ansi_output = html_to_ansi_text(soup)
     return ansi_output
+
 
 # def pytest_assertrepr_compare(config, op, left, right):
 #     if op == '==' \
