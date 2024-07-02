@@ -76,7 +76,7 @@ def pytest_html_results_table_html(report, data: list[str]):
     text = "".join(data)
     print(f"{'Z' * 77} \n [[[{text}]]] \n\n")
     # Find the assertion expressions
-    pattern = r"assert &#x27;(.*)&#x27; == &#x27;(.*)&#x27;(?![\s\S]*assert)[\s\S]*AssertionError"
+    pattern = r"assert (?:&#x27;|&quot;)(.*)(?:&#x27;|&quot;) == (?:&#x27;|&quot;)(.*)(?:&#x27;|&quot;)(?![\s\S]*assert)[\s\S]*AssertionError"
 
     if "assert" in text and (match := re.search(pattern, text, flags=re.MULTILINE)):
         data.clear()
