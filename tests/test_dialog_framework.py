@@ -11,7 +11,7 @@ from byu_pytest_utils import dialog, max_score, test_files
 def test_dialog_should_pass():
     """Everything should pass"""
 
-@pytest.mark.xfail
+
 @dialog(
     "test_files/test_dialog_should_pass.txt",
     "script_for_dialog_fails.py", 'woot', 7, 'foobar'
@@ -22,7 +22,7 @@ def test_dialog_should_fail():
     seven should pass, but another-number and everything-else should fail
     """
 
-@pytest.mark.xfail
+
 @dialog(
     "test_files/test_dialog_expects_more_input.txt",
     "script_for_dialog_passes.py", 'woot'
@@ -34,7 +34,7 @@ def test_dialog_expects_more_input_should_fail():
     but nine and everything-else should not
     """
 
-@pytest.mark.xfail
+
 @max_score(10)
 @dialog(
     "test_files/test_dialog_expects_less_input.txt",

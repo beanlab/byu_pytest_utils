@@ -12,7 +12,6 @@ def test_dialog_should_pass():
     """Everything should pass"""
 
 
-@pytest.mark.xfail
 @dialog_exec(
     "test_files/test_dialog_should_pass.txt",
     "python3", "script_for_dialog_fails.py", 'woot', 7, 'foobar'
@@ -24,7 +23,6 @@ def test_dialog_should_fail():
     """
 
 
-@pytest.mark.xfail
 @dialog_exec(
     "test_files/test_dialog_expects_more_input.txt",
     "python3", "script_for_dialog_passes.py", 'woot'
@@ -37,7 +35,6 @@ def test_dialog_expects_more_input_should_fail():
     """
 
 
-@pytest.mark.xfail
 @max_score(10)
 @dialog_exec(
     "test_files/test_dialog_expects_less_input.txt",

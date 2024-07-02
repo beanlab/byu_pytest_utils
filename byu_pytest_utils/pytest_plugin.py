@@ -40,29 +40,56 @@ def pytest_runtest_makereport(item, call):
 #         del cells[:]
 
 
-def pytest_html_results_table_html(report, data):
-    xfail = hasattr(report, "wasxfail")
+def diff_prettyHtml(diffs):
+    """Convert a diff array into a pretty HTML report.
+
+    Args:
+      diffs: Array of diff tuples.
+
+    Returns:
+      HTML representation.
+    """
+    dmp = dmp_module.diff_match_patch()
+    html = []
+    for op, data in diffs:
+        text = (
+            data.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\n", "&para;<br>")
+        )
+
+        if op == dmp.DIFF_INSERT:
+            html.append('<ins style="background:#e6ffe6;">%s</ins>' % text)
+        elif op == dmp.DIFF_DELETE:
+            html.append('<del style="background:#ffe6e6;">%s</del>' % text)
+        elif op == dmp.DIFF_EQUAL:
+            html.append("<span>%s</span>" % text)
+    return "".join(html)
+
+
+def pytest_html_results_table_html(report, data: list[str]):
+    # xfail = hasattr(report, "wasxfail")
     # (report.skipped and xfail) or (report.failed and not xfail):
-    if report.failed:
-        for i in range(len(data)):
-            line = data[i]
-            # Find the assertion expressions
-            print(line)
-            pattern = r"AssertionError: assert &#x27;([^&#x27;]*)&#x27; == &#x27;([^&#x27;]*)&#x27;"
+    # if report.failed or xfail:
 
-            match = re.search(pattern, line)
+    text = "".join(data)
+    print(f"{'Z' * 77} \n [[[{text}]]] \n\n")
+    # Find the assertion expressions
+    pattern = r"assert &#x27;(.*)&#x27; == &#x27;(.*)&#x27;(?![\s\S]*assert)[\s\S]*AssertionError"
 
-            if not match:
-                continue
-
-            left = match.group(1)
-            right = match.group(2)
-            print(f"Placeholder 1: {left}")
-            print(f"Placeholder 2: {right}")
-            dmp = dmp_module.diff_match_patch()
-            diffs = dmp.diff_main(left, right)
-            html = dmp.diff_prettyHtml(diffs)
-            data[i] = html
+    if "assert" in text and (match := re.search(pattern, text, flags=re.MULTILINE)):
+        data.clear()
+        left = match.group(1)
+        right = match.group(2)
+        print(f"Placeholder 1: {left}")
+        print(f"Placeholder 2: {right}")
+        dmp = dmp_module.diff_match_patch()
+        diffs = dmp.diff_main(left, right)
+        html = diff_prettyHtml(diffs)
+        data.append(html)
+        print(html)
+        print("Data" * 7 + f"{data}")
 
 
 
@@ -100,29 +127,29 @@ def html_to_ansi(html):
     ansi_output = html_to_ansi_text(soup)
     return ansi_output
 
-def pytest_assertrepr_compare(config, op, left, right):
-    if op == '==' \
-            and isinstance(left, str) and len(left_lines := left.splitlines()) > MIN_LINES_DIFF \
-            and isinstance(right, str) and len(right_lines := right.splitlines()) > MIN_LINES_DIFF:
-        # Use custom side-by-side assertion diff
-        # How wide?
-        left_width = max((len(line) for line in left_lines))
-        right_width = max((len(line) for line in right_lines))
-        left_view_lines = [f"{line:<{left_width}}" for line in left_lines]
-        right_view_lines = [f"{line:<{right_width}}" for line in right_lines]
-
-        # Pad with empty lines
-        while len(left_view_lines) < len(right_view_lines):
-            left_view_lines.append(' ' * left_width)
-        while len(right_view_lines) < len(left_view_lines):
-            right_view_lines.append(' ' * right_width)
-
-        # Join lines side by side
-        diff_view = [
-            'Observed (left) == Expected (right)',
-            *(l + ' | ' + r for l, r in zip(left_view_lines, right_view_lines))
-        ]
-        return diff_view
+# def pytest_assertrepr_compare(config, op, left, right):
+#     if op == '==' \
+#             and isinstance(left, str) and len(left_lines := left.splitlines()) > MIN_LINES_DIFF \
+#             and isinstance(right, str) and len(right_lines := right.splitlines()) > MIN_LINES_DIFF:
+#         # Use custom side-by-side assertion diff
+#         # How wide?
+#         left_width = max((len(line) for line in left_lines))
+#         right_width = max((len(line) for line in right_lines))
+#         left_view_lines = [f"{line:<{left_width}}" for line in left_lines]
+#         right_view_lines = [f"{line:<{right_width}}" for line in right_lines]
+#
+#         # Pad with empty lines
+#         while len(left_view_lines) < len(right_view_lines):
+#             left_view_lines.append(' ' * left_width)
+#         while len(right_view_lines) < len(left_view_lines):
+#             right_view_lines.append(' ' * right_width)
+#
+#         # Join lines side by side
+#         diff_view = [
+#             'Observed (left) == Expected (right)',
+#             *(l + ' | ' + r for l, r in zip(left_view_lines, right_view_lines))
+#         ]
+#         return diff_view
 
 
 def pytest_generate_tests(metafunc):
