@@ -8,6 +8,19 @@ from bs4 import BeautifulSoup
 from pytest_html.hooks import pytest_html_results_table_html
 from html2text import html2text
 
+from pytest import OptionGroup
+
+
+def pytest_load_initial_conftests(early_config, parser, args):
+    """Set default arguments"""
+    early_config.option.htmlpath = "report.html"
+    early_config.option.verbosity = 2
+    early_config.option.r = 1
+    print(f"ARGS:{args}")
+    print(f"Options: {early_config.option}")
+
+
+
 metadata = {}
 test_group_stats = {}
 
@@ -31,8 +44,6 @@ def clean_html_chars(html):
 def split_on_error(all_text, error_words, text, text_so_far):
     index_of_error = index_of_any(error_words, all_text)
     error_text = text_so_far[index_of_error:]
-    print(f"Text: [[[{text}]]]")
-    print(f"Error text: [[[{error_text}]]]")
     non_error_text = text[:text.index(error_text)] if error_text in text else ""
     error_text = "\n" + all_text[index_of_error:]
     return non_error_text, error_text
