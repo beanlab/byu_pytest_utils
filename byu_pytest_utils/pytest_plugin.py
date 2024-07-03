@@ -13,29 +13,29 @@ test_group_stats = {}
 
 MIN_LINES_DIFF = 3
 
-import pytest_html
+
+def index_of_any(words, text: str):
+    for word in words:
+        if word in text:
+            return text.index(word)
+    return None
 
 
-@pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_makereport(item, call):
-    outcome = yield
-    report = outcome.get_result()
-    extras = getattr(report, "extras", [])
-    if report.when == "call":
-        # always add url to report
-        extras.append(pytest_html.extras.url("http://www.example.com/"))
-        xfail = hasattr(report, "wasxfail")
-        if (report.skipped and xfail) or (report.failed and not xfail):
-            # only add additional html on failure
-            extras.append(pytest_html.extras.html("<div>Additional HTML</div>"))
-        report.extras = extras
+def clean_html_chars(html):
+    return (html.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\\n", "<br>"))
 
 
-#
-# def pytest_html_results_table_row(report, cells):
-#     print(f"\nreport:\n{report}\n\n\n cells {cells}\n\n")
-#     if report.failed:
-#         del cells[:]
+def split_on_error(all_text, error_words, text, text_so_far):
+    index_of_error = index_of_any(error_words, all_text)
+    error_text = text_so_far[index_of_error:]
+    print(f"Text: [[[{text}]]]")
+    print(f"Error text: [[[{error_text}]]]")
+    non_error_text = text[:text.index(error_text)] if error_text in text else ""
+    error_text = all_text[index_of_error:]
+    return non_error_text, error_text
 
 
 def diff_prettyHtml(diffs):
@@ -48,32 +48,37 @@ def diff_prettyHtml(diffs):
       HTML representation.
     """
     dmp = dmp_module.diff_match_patch()
+    error_words = ["Traceback", "Exception: ", "Error: "]
     html = []
-    for op, data in diffs:
-        text = (
-            data.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\n", "<br>")
-        )
-
-        if op == dmp.DIFF_INSERT:
+    diffs = [(op, clean_html_chars(data)) for op, data in diffs]
+    all_text = "".join(text for _, text in diffs)
+    text_so_far = ""
+    for op, text in diffs:
+        text_so_far += text
+        if any(error_word in text_so_far for error_word in error_words):
+            non_error_text, remaining_text = split_on_error(all_text, error_words, text, text_so_far)
+            html.append("<span>%s</span>" % non_error_text)
+            if op == dmp.DIFF_INSERT:
+                html.append('<span class="error">%s</span>' % remaining_text)
+            break
+        if op == dmp.DIFF_DELETE:
+            continue
+        elif op == dmp.DIFF_INSERT:
             html.append('<span style="background:#e6ffe6;">%s</span>' % text)
-        elif op == dmp.DIFF_DELETE:
-            pass
-            # html.append('<del style="background:#ffe6e6;">%s</del>' % text)
         elif op == dmp.DIFF_EQUAL:
             html.append("<span>%s</span>" % text)
     return "".join(html)
+
 
 
 def pytest_html_results_table_html(report, data: list[str]):
     # xfail = hasattr(report, "wasxfail")
     # (report.skipped and xfail) or (report.failed and not xfail):
     # if report.failed or xfail:
+    dmp = dmp_module.diff_match_patch()
+    dmp.Diff_EditCost = 2
 
     text = "".join(data)
-    print(f"{'Z' * 77} \n [[[{text}]]] \n\n")
     # Find the assertion expressions
     pattern = r"assert (?:&#x27;|&quot;)(.*)(?:&#x27;|&quot;) == (?:&#x27;|&quot;)(.*)(?:&#x27;|&quot;)(?![\s\S]*assert)[\s\S]*AssertionError"
 
@@ -81,10 +86,11 @@ def pytest_html_results_table_html(report, data: list[str]):
         data.clear()
         left = html2text(match.group(1))
         right = html2text(match.group(2))
-        dmp = dmp_module.diff_match_patch()
         right_diff = dmp.diff_main(right, left)
+        dmp.diff_cleanupEfficiency(right_diff)
         right_html = diff_prettyHtml(right_diff)
         left_diff = dmp.diff_main(left, right)
+        dmp.diff_cleanupEfficiency(left_diff)
         left_html = diff_prettyHtml(left_diff)
         new_html = (f'<div style="max-width: 45%; float: left; margin: 2%;">'
                     f'<h1> Old </h1>'
@@ -95,7 +101,6 @@ def pytest_html_results_table_html(report, data: list[str]):
                     f'{right_html}'
                     f'</div>')
         data.append(new_html)
-        print("Data" * 7 + f"{data}")
 
 
 def html_to_ansi(html):
@@ -130,31 +135,6 @@ def html_to_ansi(html):
     # Convert HTML to ANSI text
     ansi_output = html_to_ansi_text(soup)
     return ansi_output
-
-
-# def pytest_assertrepr_compare(config, op, left, right):
-#     if op == '==' \
-#             and isinstance(left, str) and len(left_lines := left.splitlines()) > MIN_LINES_DIFF \
-#             and isinstance(right, str) and len(right_lines := right.splitlines()) > MIN_LINES_DIFF:
-#         # Use custom side-by-side assertion diff
-#         # How wide?
-#         left_width = max((len(line) for line in left_lines))
-#         right_width = max((len(line) for line in right_lines))
-#         left_view_lines = [f"{line:<{left_width}}" for line in left_lines]
-#         right_view_lines = [f"{line:<{right_width}}" for line in right_lines]
-#
-#         # Pad with empty lines
-#         while len(left_view_lines) < len(right_view_lines):
-#             left_view_lines.append(' ' * left_width)
-#         while len(right_view_lines) < len(left_view_lines):
-#             right_view_lines.append(' ' * right_width)
-#
-#         # Join lines side by side
-#         diff_view = [
-#             'Observed (left) == Expected (right)',
-#             *(l + ' | ' + r for l, r in zip(left_view_lines, right_view_lines))
-#         ]
-#         return diff_view
 
 
 def pytest_generate_tests(metafunc):
