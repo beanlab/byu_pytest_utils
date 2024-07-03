@@ -34,7 +34,7 @@ def split_on_error(all_text, error_words, text, text_so_far):
     print(f"Text: [[[{text}]]]")
     print(f"Error text: [[[{error_text}]]]")
     non_error_text = text[:text.index(error_text)] if error_text in text else ""
-    error_text = all_text[index_of_error:]
+    error_text = "\n" + all_text[index_of_error:]
     return non_error_text, error_text
 
 
@@ -50,8 +50,8 @@ def diff_prettyHtml(diffs):
     dmp = dmp_module.diff_match_patch()
     error_words = ["Traceback", "Exception: ", "Error: "]
     html = []
-    diffs = [(op, clean_html_chars(data)) for op, data in diffs]
-    all_text = "".join(text for _, text in diffs)
+    diffs = [(op, clean_html_chars(data)) for op, data in diffs if op != dmp.DIFF_DELETE]
+    all_text = "".join(text for op, text in diffs)
     text_so_far = ""
     for op, text in diffs:
         text_so_far += text
@@ -61,9 +61,7 @@ def diff_prettyHtml(diffs):
             if op == dmp.DIFF_INSERT:
                 html.append('<span class="error">%s</span>' % remaining_text)
             break
-        if op == dmp.DIFF_DELETE:
-            continue
-        elif op == dmp.DIFF_INSERT:
+        if op == dmp.DIFF_INSERT:
             html.append('<span style="background:#e6ffe6;">%s</span>' % text)
         elif op == dmp.DIFF_EQUAL:
             html.append("<span>%s</span>" % text)
