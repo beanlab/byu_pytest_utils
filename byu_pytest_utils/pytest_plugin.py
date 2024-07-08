@@ -3,16 +3,12 @@ import re
 import pytest
 import json
 import diff_match_patch as dmp_module
-import pytest_html
-from bs4 import BeautifulSoup
-from pytest_html.hooks import pytest_html_results_table_html
 from html2text import html2text
 
-from pytest import OptionGroup
 
 
 def pytest_load_initial_conftests(early_config, parser, args):
-    """Set default arguments"""
+    """This hook sets default arguments for pytest"""
     early_config.option.htmlpath = "report.html"
     early_config.option.verbosity = 2
     early_config.option.r = 1
@@ -68,22 +64,19 @@ def diff_prettyHtml(diffs):
         text_so_far += text
         if any(error_word in text_so_far for error_word in error_words):
             non_error_text, remaining_text = split_on_error(all_text, error_words, text, text_so_far)
-            html.append("<span>%s</span>" % non_error_text)
+            html.append(f'<span>{non_error_text}</span>')
             if op == dmp.DIFF_INSERT:
-                html.append('<span class="error">%s</span>' % remaining_text)
+                html.append(f'<span class="error">{remaining_text}</span>')
             break
         if op == dmp.DIFF_INSERT:
-            html.append('<span style="background:#e6ffe6;">%s</span>' % text)
+            html.append(f'<span style="background:#e6ffe6;">{text}</span>')
         elif op == dmp.DIFF_EQUAL:
-            html.append("<span>%s</span>" % text)
+            html.append(f'<span>{text}</span>')
     return "".join(html)
 
 
 
 def pytest_html_results_table_html(report, data: list[str]):
-    # xfail = hasattr(report, "wasxfail")
-    # (report.skipped and xfail) or (report.failed and not xfail):
-    # if report.failed or xfail:
     dmp = dmp_module.diff_match_patch()
     dmp.Diff_EditCost = 2
 
@@ -110,40 +103,6 @@ def pytest_html_results_table_html(report, data: list[str]):
                     f'{right_html}'
                     f'</div>')
         data.append(new_html)
-
-
-def html_to_ansi(html):
-    # ANSI escape code mapping
-    html_to_ansi = {
-        "#ffe6e6": "\033[41m",  # Red background
-        "#e6ffe6": "\033[42m",  # Green background
-        "reset": "\033[0m"  # Reset
-    }
-
-    # Parse HTML
-    soup = BeautifulSoup(html, "html.parser")
-
-    # Function to convert HTML to ANSI text
-    def html_to_ansi_text(soup):
-        ansi_text = ""
-        for elem in soup.descendants:
-            if elem.name == "span":
-                ansi_text += elem.get_text()
-            elif elem.name == "del":
-                color_code = html_to_ansi.get(elem.get("style")[12:19], "")
-                ansi_text += f"{color_code}{elem.get_text()}{html_to_ansi['reset']}"
-            elif elem.name == "ins":
-                color_code = html_to_ansi.get(elem.get("style")[12:19], "")
-                ansi_text += f"{color_code}{elem.get_text()}{html_to_ansi['reset']}"
-            elif elem.name == "br":
-                ansi_text += "\n"
-            elif elem.name == "para":
-                ansi_text += "¶"
-        return ansi_text
-
-    # Convert HTML to ANSI text
-    ansi_output = html_to_ansi_text(soup)
-    return ansi_output
 
 
 def pytest_generate_tests(metafunc):
