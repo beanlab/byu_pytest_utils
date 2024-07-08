@@ -6,3 +6,4 @@ __pycache__/
 .DS*
 tests/assets/style.css
 tests/results.json
+tests/report.html
