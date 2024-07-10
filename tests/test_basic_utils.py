@@ -9,7 +9,6 @@ def test_should_pass():
 
 # The purpose of this test is to see
 # how a failure behaves in pycharm/results.json
-@pytest.mark.xfail
 @max_score(20)
 def test_should_fail():
     assert 7 == 8

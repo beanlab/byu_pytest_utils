@@ -55,7 +55,7 @@ def diff_prettyHtml(diffs):
       HTML representation.
     """
     dmp = dmp_module.diff_match_patch()
-    error_words = ["Traceback", "Exception: ", "Error: "]
+    error_words = ["Traceback", "Exception:", "Error:"]
     html = []
     diffs = [(op, clean_html_chars(data)) for op, data in diffs if op != dmp.DIFF_DELETE]
     all_text = "".join(text for op, text in diffs)
@@ -75,25 +75,18 @@ def diff_prettyHtml(diffs):
     return "".join(html)
 
 
-
 def pytest_html_results_table_html(report, data: list[str]):
-    dmp = dmp_module.diff_match_patch()
-    dmp.Diff_EditCost = 2
-
     text = "".join(data)
     # Find the assertion expressions
     pattern = r"assert (?:&#x27;|&quot;)(.*)(?:&#x27;|&quot;) == (?:&#x27;|&quot;)(.*)(?:&#x27;|&quot;)(?![\s\S]*assert)[\s\S]*AssertionError"
 
     if "assert" in text and (match := re.search(pattern, text, flags=re.MULTILINE)):
+        # Delete all strings from data, then add new html
         data.clear()
         left = html2text(match.group(1))
         right = html2text(match.group(2))
-        right_diff = dmp.diff_main(right, left)
-        dmp.diff_cleanupEfficiency(right_diff)
-        right_html = diff_prettyHtml(right_diff)
-        left_diff = dmp.diff_main(left, right)
-        dmp.diff_cleanupEfficiency(left_diff)
-        left_html = diff_prettyHtml(left_diff)
+        right_html = diff_texts_as_html(right, left)
+        left_html = diff_texts_as_html(left, right)
         new_html = (f'<div style="max-width: 45%; float: left; margin: 2%;">'
                     f'<h1> Old </h1>'
                     f'{left_html}'
@@ -103,6 +96,14 @@ def pytest_html_results_table_html(report, data: list[str]):
                     f'{right_html}'
                     f'</div>')
         data.append(new_html)
+
+
+def diff_texts_as_html(old, new):
+    dmp = dmp_module.diff_match_patch()
+    dmp.Diff_EditCost = 2
+    diff = dmp.diff_main(old, new)
+    dmp.diff_cleanupEfficiency(diff)
+    return diff_prettyHtml(diff)
 
 
 def pytest_generate_tests(metafunc):
