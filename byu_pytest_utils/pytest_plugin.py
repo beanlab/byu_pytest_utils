@@ -5,15 +5,27 @@ import json
 import diff_match_patch as dmp_module
 from html2text import html2text
 
-
-
-def pytest_load_initial_conftests(early_config, parser, args):
+def pytest_load_initial_conftests(early_config, parser, args: list):
     """This hook sets default arguments for pytest"""
     early_config.option.htmlpath = "report.html"
-    early_config.option.verbosity = 2
+    # Ensure summary is shown
+    if '--no-summary' in args:
+        args.remove('--no-summary')
+    # early_config.option.verbosity = 2
+    # early_config.option.verbose = 2
     early_config.option.r = 1
     print(f"ARGS:{args}")
     print(f"Options: {early_config.option}")
+    with open("ping.txt", "w") as f:
+        f.write(f"ARGS:{args}\n")
+        f.write(f"Options: {early_config.option}")
+
+
+def pytest_runtest_logreport(report):
+    report.longrepr = None
+    if report.when != "teardown":
+        return
+
 
 
 
@@ -37,12 +49,9 @@ def clean_html_chars(html):
             .replace("\\n", "<br>"))
 
 
-def split_on_error(all_text, error_words, text, text_so_far):
+def split_on_error(all_text, error_words):
     index_of_error = index_of_any(error_words, all_text)
-    error_text = text_so_far[index_of_error:]
-    non_error_text = text[:text.index(error_text)] if error_text in text else ""
-    error_text = "\n" + all_text[index_of_error:]
-    return non_error_text, error_text
+    return all_text[:index_of_error], all_text[index_of_error:]
 
 
 def diff_prettyHtml(diffs):
@@ -55,19 +64,9 @@ def diff_prettyHtml(diffs):
       HTML representation.
     """
     dmp = dmp_module.diff_match_patch()
-    error_words = ["Traceback", "Exception:", "Error:"]
     html = []
     diffs = [(op, clean_html_chars(data)) for op, data in diffs if op != dmp.DIFF_DELETE]
-    all_text = "".join(text for op, text in diffs)
-    text_so_far = ""
     for op, text in diffs:
-        text_so_far += text
-        if any(error_word in text_so_far for error_word in error_words):
-            non_error_text, remaining_text = split_on_error(all_text, error_words, text, text_so_far)
-            html.append(f'<span>{non_error_text}</span>')
-            if op == dmp.DIFF_INSERT:
-                html.append(f'<span class="error">{remaining_text}</span>')
-            break
         if op == dmp.DIFF_INSERT:
             html.append(f'<span style="background:#e6ffe6;">{text}</span>')
         elif op == dmp.DIFF_EQUAL:
@@ -83,10 +82,17 @@ def pytest_html_results_table_html(report, data: list[str]):
     if "assert" in text and (match := re.search(pattern, text, flags=re.MULTILINE)):
         # Delete all strings from data, then add new html
         data.clear()
-        left = html2text(match.group(1))
-        right = html2text(match.group(2))
-        right_html = diff_texts_as_html(right, left)
-        left_html = diff_texts_as_html(left, right)
+        observed = html2text(match.group(1))
+        expected = html2text(match.group(2))
+
+        error_words = ["Traceback", "Exception: ", "Error: "]
+        error_html = ""
+        if any(error_word in observed for error_word in error_words):
+            observed, error_text = split_on_error(observed, error_words)
+            error_html = f'<span class="error">{error_text}</span>'
+
+        right_html = diff_texts_as_html(expected, observed)
+        left_html = diff_texts_as_html(observed, expected)
         new_html = (f'<div style="max-width: 45%; float: left; margin: 2%;">'
                     f'<h1> Old </h1>'
                     f'{left_html}'
@@ -94,6 +100,7 @@ def pytest_html_results_table_html(report, data: list[str]):
                     f'<div style="max-width: 45%; float: left; margin: 2%;">'
                     f'<h1> New </h1>'
                     f'{right_html}'
+                    f'{error_html}'
                     f'</div>')
         data.append(new_html)
 
