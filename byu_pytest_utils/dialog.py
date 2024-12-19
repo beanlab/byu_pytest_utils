@@ -172,7 +172,7 @@ def _score_observed_output(expected_output, observed_output):
             'observed': group_obs[group_id].replace(GAP, ''),
             'score': group_matches.get(group_id, 0) / group_counts[group_id] * group_max,
             'max_score': group_max,
-            'passed': group_matches.get(group_id, -1) == group_counts[group_id],
+            'passed': group_max == 0 or group_matches.get(group_id, -1) == group_counts[group_id],
         }
 
     return group_stats
@@ -218,6 +218,7 @@ def _score_output(
             obs_content = obs_file.read_text()
         stats = _score_observed_output(exp_file.read_text(), obs_content)
         group_stats[exp_file.name] = _consolidate_stats(exp_file.name, stats)
+
 
     return group_stats
 
