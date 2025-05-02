@@ -6,13 +6,11 @@ import subprocess as sp
 import sys
 import traceback
 import warnings
-import webbrowser
 from functools import wraps
 from pathlib import Path
 from typing import Union
 
 from byu_pytest_utils.edit_dist import edit_dist
-from byu_pytest_utils.html.html_renderer import HTMLRenderer
 
 DEFAULT_GROUP = '.'
 DEFAULT_GROUP_NAME = 'everything-else'
@@ -28,9 +26,8 @@ def _make_group_stats_decorator(group_stats):
         def new_func(group_name):
             group_stat = group_stats[group_name]
             if not group_stat['passed']:
-                assert group_stat['score'] == group_stat['max_score']
-                renderer = HTMLRenderer()
-                renderer.render(group_stat['score'], group_stat['observed'], group_stat['expected'])
+                assert group_stat['observed'] == group_stat['expected']
+
         new_func._group_stats = group_stats
         new_func.__name__ = func.__name__
         new_func.__module__ = func.__module__
