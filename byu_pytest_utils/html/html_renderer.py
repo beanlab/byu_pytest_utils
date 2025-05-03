@@ -60,30 +60,75 @@ class HTMLRenderer:
     @staticmethod
     def _build_comparison_strings(obs: str, exp: str, gap: str) -> tuple[str, str]:
         """
-        Build HTML strings for observed and expected values with color-coded spans.
+        Build HTML strings for observed and expected values with color-coded background styles.
+        Wraps entire substrings in a single span tag instead of individual characters.
         """
+        def wrap_span(content, color):
+            return f'<span style="background-color:{color}; box-shadow: 0 0 0 {color};">{content}</span>'
+
         observed, expected = '', ''
+        current_obs, current_exp = '', ''
+        current_obs_color, current_exp_color = None, None
+
         for o, e in zip(obs, exp):
             if o == gap:
-                observed += f'<span style="background-color:rgba(212, 237, 218, 0.5); color:rgba(21, 87, 36, 0.8)">{o}</span>'
+                color = "rgba(21, 87, 36, 0.8)"  # Green for gaps
+                if current_obs_color != color:
+                    if current_obs:
+                        observed += wrap_span(current_obs, current_obs_color)
+                    current_obs = o
+                    current_obs_color = color
+                else:
+                    current_obs += o
             elif e == gap:
-                expected += f'<span style="background-color:rgba(248, 215, 218, 0.5); color:rgba(114, 28, 36, 0.8)">{e}</span>'
+                color = "rgba(114, 28, 36, 0.8)"  # Red for gaps
+                if current_exp_color != color:
+                    if current_exp:
+                        expected += wrap_span(current_exp, current_exp_color)
+                    current_exp = e
+                    current_exp_color = color
+                else:
+                    current_exp += e
             elif o != e:
-                observed += f'<span style="background-color:rgba(204, 229, 255, 0.5); color:rgba(0, 64, 133, 0.8)">{o}</span>'
-                expected += f'<span style="background-color:rgba(204, 229, 255, 0.5); color:rgba(0, 64, 133, 0.8)">{e}</span>'
+                color = "rgba(100, 149, 237, 0.8)"  # Lighter blue for mismatches
+                if current_obs_color != color:
+                    if current_obs:
+                        observed += wrap_span(current_obs, current_obs_color)
+                    current_obs = o
+                    current_obs_color = color
+                else:
+                    current_obs += o
+
+                if current_exp_color != color:
+                    if current_exp:
+                        expected += wrap_span(current_exp, current_exp_color)
+                    current_exp = e
+                    current_exp_color = color
+                else:
+                    current_exp += e
             else:
+                if current_obs:
+                    observed += wrap_span(current_obs, current_obs_color)
+                    current_obs = ''
+                    current_obs_color = None
+                if current_exp:
+                    expected += wrap_span(current_exp, current_exp_color)
+                    current_exp = ''
+                    current_exp_color = None
                 observed += o
                 expected += e
 
-        # Handle remaining characters
-        observed += ''.join(f'<span style="background-color:rgba(204, 229, 255, 0.5); color:rgba(0, 64, 133, 0.8)">{o}</span>' for o in obs[len(exp):])
-        expected += ''.join(f'<span style="background-color:rgba(204, 229, 255, 0.5); color:rgba(0, 64, 133, 0.8)">{e}</span>' for e in exp[len(obs):])
+        # Add remaining substrings
+        if current_obs:
+            observed += wrap_span(current_obs, current_obs_color)
+        if current_exp:
+            expected += wrap_span(current_exp, current_exp_color)
 
-        # Handle empty strings
-        if not obs:
-            observed = f'<span style="background-color:rgba(204, 229, 255, 0.5); color:rgba(0, 64, 133, 0.8)">{obs}</span>'
-        if not exp:
-            expected = f'<span style="background-color:rgba(204, 229, 255, 0.5); color:rgba(0, 64, 133, 0.8)">{exp}</span>'
+        # Handle remaining characters in longer strings
+        if len(obs) > len(exp):
+            observed += wrap_span(obs[len(exp):], "rgba(100, 149, 237, 0.8)")
+        elif len(exp) > len(obs):
+            expected += wrap_span(exp[len(obs):], "rgba(100, 149, 237, 0.8)")
 
         return observed, expected
 

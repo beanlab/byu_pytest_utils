@@ -9,7 +9,9 @@ import warnings
 from functools import wraps
 from pathlib import Path
 from typing import Union
+from dataclasses import dataclass
 
+from byu_pytest_utils.html.html_renderer import HTMLRenderer
 from byu_pytest_utils.edit_dist import edit_dist
 
 DEFAULT_GROUP = '.'
@@ -19,14 +21,42 @@ GAP = '~'
 
 PS = Union[Path, str]
 
+@dataclass
+class GroupStats:
+    group_name: str
+    expected: str
+    observed: str
+    score: float
+    max_score: float
+    passed: bool
 
-def _make_group_stats_decorator(group_stats):
+def _make_group_stats_decorator(group_stats: GroupStats):
     def decorator(func):
         # func should have empty (pass) body and no arguments
         def new_func(group_name):
             group_stat = group_stats[group_name]
             if not group_stat['passed']:
-                assert group_stat['observed'] == group_stat['expected']
+                # Generate individual HTML report for failed groups
+                html_renderer = HTMLRenderer()
+                html_renderer.render(
+                    test_name=group_stat['name'],
+                    score=group_stat['score'],
+                    obs=group_stat['observed'],
+                    exp=group_stat['expected'],
+                    gap=GAP,
+                    result_path=Path(f"{func.__name__}_{group_stat['name']}.html"),
+                    open_in_browser=True
+                )
+
+                print(f"See HTML report for group '{group_stat['name']}' at {func.__name__}_{group_stat['name']}.html")
+
+                # Raise an exception to fail the test
+                raise AssertionError(
+                    f"Test failed for group '{group_stat['name']}':\n"
+                    f"Expected: {group_stat['expected']}\n"
+                    f"Observed: {group_stat['observed']}\n"
+                    f"Score: {group_stat['score']}/{group_stat['max_score']}"
+                )
 
         new_func._group_stats = group_stats
         new_func.__name__ = func.__name__
