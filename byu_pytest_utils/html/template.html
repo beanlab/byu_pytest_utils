@@ -51,8 +51,11 @@
           overflow-x: auto;
       }
       .content span {
-          padding: 2px 4px;
-          border-radius: 3px;
+         display: inline; /* Ensure spans are inline */
+         color: inherit;  /* Use only color changes */
+         padding: 0;      /* Remove padding */
+         margin: 0;       /* Remove margin */
+         line-height: inherit; /* Match the line height of surrounding text */
       }
       .test-info {
           margin: 10px 20px;
