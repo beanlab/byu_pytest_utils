@@ -44,7 +44,7 @@ def _make_group_stats_decorator(group_stats: GroupStats):
                     obs=group_stat['observed'],
                     exp=group_stat['expected'],
                     gap=GAP,
-                    result_path=Path(f"{func.__name__}_{group_stat['name']}.html"),
+                    result_path = Path(__file__).parent / f"{func.__name__}_{group_stat['name']}.html",
                     open_in_browser=True
                 )
 
