@@ -6,12 +6,12 @@ import subprocess as sp
 import sys
 import traceback
 import warnings
+from collections import defaultdict
 from functools import wraps
 from pathlib import Path
 from typing import Union
-from dataclasses import dataclass
 
-from byu_pytest_utils.html.html_renderer import HTMLRenderer
+from byu_pytest_utils.html.html_renderer import HTMLRenderer, ComparisonInfo
 from byu_pytest_utils.edit_dist import edit_dist
 
 DEFAULT_GROUP = '.'
@@ -21,43 +21,23 @@ GAP = '~'
 
 PS = Union[Path, str]
 
-@dataclass
-class GroupStats:
-    group_name: str
-    expected: str
-    observed: str
-    score: float
-    max_score: float
-    passed: bool
+TEST_RESULTS = defaultdict(list)
 
-def _make_group_stats_decorator(group_stats: GroupStats):
+def _make_group_stats_decorator(group_stats):
     def decorator(func):
         # func should have empty (pass) body and no arguments
         def new_func(group_name):
             group_stat = group_stats[group_name]
+            TEST_RESULTS[f"{func.__module__}"].append(
+                ComparisonInfo(
+                    test_name=f"{func.__name__}",
+                    score=round(group_stat['score'], 1),
+                    observed=group_stat['observed'],
+                    expected=group_stat['expected']
+                )
+            )
             if not group_stat['passed']:
-                # Generate individual HTML report for failed groups
-                html_renderer = HTMLRenderer()
-                html_renderer.render(
-                    test_name=group_stat['name'],
-                    score=group_stat['score'],
-                    obs=group_stat['observed'],
-                    exp=group_stat['expected'],
-                    gap=GAP,
-                    result_path = Path(__file__).parent / f"{func.__name__}_{group_stat['name']}.html",
-                    open_in_browser=True
-                )
-
-                print(f"See HTML report for group '{group_stat['name']}' at {func.__name__}_{group_stat['name']}.html")
-
-                # Raise an exception to fail the test
-                raise AssertionError(
-                    f"Test failed for group '{group_stat['name']}':\n"
-                    f"Expected: {group_stat['expected']}\n"
-                    f"Observed: {group_stat['observed']}\n"
-                    f"Score: {group_stat['score']}/{group_stat['max_score']}"
-                )
-
+                assert group_stat['observed'] == group_stat['expected']
         new_func._group_stats = group_stats
         new_func.__name__ = func.__name__
         new_func.__module__ = func.__module__
@@ -600,6 +580,27 @@ def record_exec(dialog_file, executable, *args):
             file.write(line)
 
 
+def render_html_results():
+    """
+    Render the HTML file after all tests are completed.
+    """
+    # Extract the test_file_name and comparison_info from TEST_RESULTS
+    test_file_name, comparison_info = next(iter(TEST_RESULTS.items()))
+
+    # Define the output path for the HTML file
+    output_path = Path(f"{test_file_name}_results.html")
+
+    # Render the HTML file using TEST_RESULTS
+    renderer = HTMLRenderer()
+    renderer.render(
+        test_file_name=test_file_name,
+        comparison_info=comparison_info,
+        file_name=str(output_path)
+    )
+
+    print(f"\nHTML test results have been saved to: {output_path.resolve()}")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('dialog_file', help='Dialog file to write')
@@ -614,3 +615,4 @@ if __name__ == '__main__':
         record_exec(args.dialog_file, args.to_run, *args.args)
     else:
         record_script(args.dialog_file, args.to_run, *args.args)
+
