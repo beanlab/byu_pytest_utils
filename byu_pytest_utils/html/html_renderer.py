@@ -1,8 +1,19 @@
 import webbrowser
+import jinja2 as jj
+
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
+from dataclasses import dataclass
 from byu_pytest_utils.edit_dist import edit_dist
+
+
+@dataclass
+class ComparisonInfo:
+    test_name: str
+    score: float
+    observed: str
+    expected: str
 
 
 def quote(url: str) -> str:
@@ -11,14 +22,12 @@ def quote(url: str) -> str:
 
 class HTMLRenderer:
     def __init__(self, template_path: Optional[Path] = None):
-        self._html_template = template_path or (Path(__file__).parent / 'template.html')
+        self._html_template = template_path or (Path(__file__).parent / 'template.html.jinja')
 
     def render(
         self,
-        test_name: str,
-        score: float,
-        obs: str,
-        exp: str,
+        test_file_name: str,
+        comparison_info: list[ComparisonInfo],
         gap: str = '~',
         result_path: Optional[Path] = None,
         open_in_browser: bool = True
@@ -31,20 +40,22 @@ class HTMLRenderer:
             raise FileNotFoundError(f"Template not found at {self._html_template}")
         template = self._html_template.read_text(encoding="utf-8")
 
-        # Build observed and expected strings
-        observed, expected = self._build_comparison_strings(obs, exp, gap)
+        # Generate jinja args
+        jinja_args = {
+            'TEST_FILE': Path(test_file_name).stem.replace('_', ' ').replace('-', ' '),
+            'COMPARISON_INFO': [
+                (
+                    info.test_name,
+                    *self._build_comparison_strings(info.observed, info.expected, gap),
+                    info.score
+                )
+                for info in comparison_info
+            ],
+            'TIME': datetime.now().strftime("%B %d, %Y %I:%M %p")
+        }
 
-        # Generate timestamp
-        timestamp = datetime.now().strftime("%B %d, %Y %I:%M %p")
-
-        # Generate HTML content
-        html_content = (
-            template.replace('%%TEST_NAME%%', test_name)
-            .replace('%%OBSERVED%%', observed)
-            .replace('%%EXPECTED%%', expected)
-            .replace('%%SCORE%%', str(score))
-            .replace('%%TIMESTAMP%%', timestamp)
-        )
+        # Render the HTML content
+        html_content = jj.Template(template).render(**jinja_args)
 
         # Write final HTML to the result path
         result_path = result_path or (Path.cwd() / 'comparison_report.html')
@@ -52,7 +63,6 @@ class HTMLRenderer:
 
         # Open in browser if required
         url = f'file://{quote(str(result_path))}'
-        print(f'Generated HTML report at {url}')
         if open_in_browser:
             webbrowser.open(url)
         return url
@@ -90,7 +100,7 @@ class HTMLRenderer:
                 else:
                     current_exp += e
             elif o != e:
-                color = "rgba(100, 149, 237, 0.8)"  # Lighter blue for mismatches
+                color = "rgba(100, 149, 237, 0.8)"  # Blue for mismatches
                 if current_obs_color != color:
                     if current_obs:
                         observed += wrap_span(current_obs, current_obs_color)
@@ -134,6 +144,15 @@ class HTMLRenderer:
 
 
 if __name__ == '__main__':
+    score1, obs1, exp1 = edit_dist('hello', 'hallo')
+    score2, obs2, exp2 = edit_dist('world', 'word')
+    score3, obs3, exp3 = edit_dist('bob', 'chad')
+
+    test_comparison_info = [
+        ComparisonInfo('Test 1', score1, obs1, exp1),
+        ComparisonInfo('Test 2', score2, obs2, exp2),
+        ComparisonInfo('Test 3', score3, obs3, exp3)
+    ]
+
     renderer = HTMLRenderer()
-    score, obs, exp = edit_dist('hello', 'hallo')
-    renderer.render('Test Case', score, obs, exp)
+    renderer.render("test_basic_utils.py", test_comparison_info)
