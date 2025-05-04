@@ -7,6 +7,10 @@ from datetime import datetime
 from dataclasses import dataclass
 from byu_pytest_utils.edit_dist import edit_dist
 
+RED = "rgba(255, 99, 71, 0.8)"
+GREEN = "rgba(50, 205, 50, 0.8)"
+BLUE = "rgba(100, 149, 237, 0.8)"
+
 
 @dataclass
 class ComparisonInfo:
@@ -14,10 +18,6 @@ class ComparisonInfo:
     score: float
     observed: str
     expected: str
-
-
-def quote(url: str) -> str:
-    return url.replace(' ', '%20').replace('\\', '/')
 
 
 class HTMLRenderer:
@@ -35,6 +35,7 @@ class HTMLRenderer:
         """
         Generate and optionally open an HTML file showing a comparison between observed and expected values.
         """
+
         # Read the HTML template
         if not self._html_template.exists():
             raise FileNotFoundError(f"Template not found at {self._html_template}")
@@ -62,7 +63,7 @@ class HTMLRenderer:
         result_path.write_text(html_content, encoding='utf-8')
 
         # Open in browser if required
-        url = f'file://{quote(str(result_path))}'
+        url = f'file://{self.quote(str(result_path))}'
         if open_in_browser:
             webbrowser.open(url)
         return url
@@ -82,38 +83,35 @@ class HTMLRenderer:
 
         for o, e in zip(obs, exp):
             if o == gap:
-                color = "rgba(21, 87, 36, 0.8)"  # Green for gaps
-                if current_obs_color != color:
+                if current_obs_color != GREEN:
                     if current_obs:
                         observed += wrap_span(current_obs, current_obs_color)
                     current_obs = o
-                    current_obs_color = color
+                    current_obs_color = GREEN
                 else:
                     current_obs += o
             elif e == gap:
-                color = "rgba(114, 28, 36, 0.8)"  # Red for gaps
-                if current_exp_color != color:
+                if current_exp_color != RED:
                     if current_exp:
                         expected += wrap_span(current_exp, current_exp_color)
                     current_exp = e
-                    current_exp_color = color
+                    current_exp_color = RED
                 else:
                     current_exp += e
             elif o != e:
-                color = "rgba(100, 149, 237, 0.8)"  # Blue for mismatches
-                if current_obs_color != color:
+                if current_obs_color != BLUE:
                     if current_obs:
                         observed += wrap_span(current_obs, current_obs_color)
                     current_obs = o
-                    current_obs_color = color
+                    current_obs_color = BLUE
                 else:
                     current_obs += o
 
-                if current_exp_color != color:
+                if current_exp_color != BLUE:
                     if current_exp:
                         expected += wrap_span(current_exp, current_exp_color)
                     current_exp = e
-                    current_exp_color = color
+                    current_exp_color = BLUE
                 else:
                     current_exp += e
             else:
@@ -136,11 +134,15 @@ class HTMLRenderer:
 
         # Handle remaining characters in longer strings
         if len(obs) > len(exp):
-            observed += wrap_span(obs[len(exp):], "rgba(100, 149, 237, 0.8)")
+            observed += wrap_span(obs[len(exp):], BLUE)
         elif len(exp) > len(obs):
-            expected += wrap_span(exp[len(obs):], "rgba(100, 149, 237, 0.8)")
+            expected += wrap_span(exp[len(obs):], BLUE)
 
         return observed, expected
+
+    @staticmethod
+    def quote(url: str) -> str:
+        return url.replace(' ', '%20').replace('\\', '/')
 
 
 if __name__ == '__main__':
