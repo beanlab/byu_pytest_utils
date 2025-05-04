@@ -28,8 +28,8 @@ class HTMLRenderer:
         self,
         test_file_name: str,
         comparison_info: list[ComparisonInfo],
+        file_name: str,
         gap: str = '~',
-        result_path: Optional[Path] = None,
         open_in_browser: bool = True
     ) -> str:
         """
@@ -58,8 +58,8 @@ class HTMLRenderer:
         # Render the HTML content
         html_content = jj.Template(template).render(**jinja_args)
 
-        # Write final HTML to the result path
-        result_path = result_path or (Path.cwd() / 'comparison_report.html')
+        # Write final HTML to the result path add the .html extension
+        result_path = Path(__file__).parent / f'{file_name}.html'
         result_path.write_text(html_content, encoding='utf-8')
 
         # Open in browser if required
@@ -157,4 +157,8 @@ if __name__ == '__main__':
     ]
 
     renderer = HTMLRenderer()
-    renderer.render("test_basic_utils.py", test_comparison_info)
+    renderer.render(
+        "test_basic_utils.py",
+        test_comparison_info,
+        file_name="test_report"
+    )
