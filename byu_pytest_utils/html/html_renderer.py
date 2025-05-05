@@ -58,6 +58,10 @@ class HTMLRenderer:
                 )
                 for info in comparison_info
             ],
+            'TESTS_PASSED': sum(info.passed for info in comparison_info),
+            'TOTAL_TESTS': len(comparison_info),
+            'TOTAL_SCORE': sum(info.score for info in comparison_info),
+            'TOTAL_POSSIBLE_SCORE': len(comparison_info) * 10,
             'TIME': datetime.now().strftime("%B %d, %Y %I:%M %p")
         }
 
@@ -164,7 +168,7 @@ if __name__ == '__main__':
 
     renderer = HTMLRenderer()
     renderer.render(
-        "test_basic_utils.py",
-        test_comparison_info,
-        file_name="test_report"
+        test_file_dir=Path(__file__).parent,
+        test_file_name='test',
+        comparison_info=test_comparison_info
     )

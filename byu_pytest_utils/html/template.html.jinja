@@ -32,6 +32,14 @@
             margin: 0;
             padding: 25px 0;
         }
+        .test-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 80px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
         .content-wrapper {
             flex: 1;
             display: flex;
@@ -86,6 +94,10 @@
     <header>
         <h1>{{ TEST_FILE }}</h1>
     </header>
+    <div class="test-summary">
+        <span>Passed: {{ TESTS_PASSED }} / {{ TOTAL_TESTS }}</span>
+        <span>Total Score: {{ TOTAL_SCORE }} / {{ TOTAL_POSSIBLE_SCORE }}</span>
+    </div>
     {% for name, observed, expected, score, status in COMPARISON_INFO %}
     <div class="test-result-{{ status }}">
         <div class="content-wrapper">
