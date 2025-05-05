@@ -18,6 +18,7 @@ class ComparisonInfo:
     score: float
     observed: str
     expected: str
+    passed: bool
 
 
 class HTMLRenderer:
@@ -26,9 +27,9 @@ class HTMLRenderer:
 
     def render(
         self,
+        test_file_dir: Path,
         test_file_name: str,
         comparison_info: list[ComparisonInfo],
-        file_name: str,
         gap: str = '~',
         open_in_browser: bool = True
     ) -> str:
@@ -41,14 +42,19 @@ class HTMLRenderer:
             raise FileNotFoundError(f"Template not found at {self._html_template}")
         template = self._html_template.read_text(encoding="utf-8")
 
+        # Prepare test file name
+        result_name = Path(test_file_name).stem
+        file_name = result_name.replace('_', ' ').replace('-', ' ').title()
+
         # Generate jinja args
         jinja_args = {
-            'TEST_FILE': Path(test_file_name).stem.replace('_', ' ').replace('-', ' '),
+            'TEST_FILE': file_name,
             'COMPARISON_INFO': [
                 (
                     info.test_name,
                     *self._build_comparison_strings(info.observed, info.expected, gap),
-                    info.score
+                    info.score,
+                    'passed' if info.passed else 'failed',
                 )
                 for info in comparison_info
             ],
@@ -59,7 +65,7 @@ class HTMLRenderer:
         html_content = jj.Template(template).render(**jinja_args)
 
         # Write final HTML to the result path add the .html extension
-        result_path = Path(__file__).parent / f'{file_name}.html'
+        result_path = test_file_dir / f'{result_name}_results.html'
         result_path.write_text(html_content, encoding='utf-8')
 
         # Open in browser if required
@@ -148,12 +154,12 @@ class HTMLRenderer:
 if __name__ == '__main__':
     score1, obs1, exp1 = edit_dist('hello', 'hallo')
     score2, obs2, exp2 = edit_dist('world', 'word')
-    score3, obs3, exp3 = edit_dist('bob', 'chad')
+    score3, obs3, exp3 = edit_dist('bob', 'bob')
 
     test_comparison_info = [
-        ComparisonInfo('Test 1', score1, obs1, exp1),
-        ComparisonInfo('Test 2', score2, obs2, exp2),
-        ComparisonInfo('Test 3', score3, obs3, exp3)
+        ComparisonInfo('Test 1', score1, obs1, exp1, False),
+        ComparisonInfo('Test 2', score2, obs2, exp2, False),
+        ComparisonInfo('Test 3', score3, obs3, exp3, True)
     ]
 
     renderer = HTMLRenderer()

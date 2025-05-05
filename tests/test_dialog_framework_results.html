@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparison Report</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            background-color: #f9f9f9;
+            color: rgb(0, 46, 93);
+        }
+        header, footer {
+            background-color: rgb(0, 46, 93);
+            color: white;
+            text-align: center;
+        }
+        header {
+            margin-bottom: 40px;
+        }
+        footer {
+            margin-top: 40px;
+        }
+        header h1, footer p {
+            margin: 0;
+            padding: 25px 0;
+        }
+        .content-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .test-result-passed {
+            background-color: #d4edda;
+            border: 3px solid #c3e6cb;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 40px 75px 40px 75px;
+        }
+        .test-result-failed {
+            background-color: #f8d7da;
+            border: 3px solid #f5c6cb;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 40px 75px 40px 75px;
+        }
+        .comparison-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            margin: 20px;
+        }
+        .section {
+            flex: 1;
+        }
+        .section strong {
+            font-size: 1.2em;
+        }
+        .content {
+            background: rgb(245, 245, 245);
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .content span {
+            display: inline;
+            color: inherit;
+            padding: 0;
+            margin: 0;
+            line-height: inherit;
+        }
+        .test-info {
+            margin: 10px 20px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Test Dialog Framework</h1>
+    </header>
+    
+    <div class="test-result-passed">
+        <div class="content-wrapper">
+            <div class="test-info">
+                <h2>Test Dialog Should Pass:</h2>
+            </div>
+            <div class="comparison-container">
+                <div class="section">
+                    <p><strong>Observed:</strong></p>
+                    <div class="content">
+                        My args are ['script_for_dialog_passes.py', 'woot', '7']
+Number: 7
+The number is 7
+Number: 8
+Another number is 8
+
+                    </div>
+                </div>
+                <div class="section">
+                    <p><strong>Expected:</strong></p>
+                    <div class="content">
+                        My args are ['script_for_dialog_passes.py', 'woot', '7']
+Number: 7
+The number is 7
+Number: 8
+Another number is 8
+
+                    </div>
+                </div>
+            </div>
+            <div class="test-info">
+                <p><strong>Score:</strong> 0.0</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-result-passed">
+        <div class="content-wrapper">
+            <div class="test-info">
+                <h2>Test Dialog Output File:</h2>
+            </div>
+            <div class="comparison-container">
+                <div class="section">
+                    <p><strong>Observed:</strong></p>
+                    <div class="content">
+                        ThE ApplE Is rEd.
+ThE bAnAnA Is yEllOw.
+ThE pEAr Is grEEn.
+                     
+                    </div>
+                </div>
+                <div class="section">
+                    <p><strong>Expected:</strong></p>
+                    <div class="content">
+                        ThE ApplE Is rEd.
+ThE bAnAnA Is yEllOw.
+ThE pEAr Is grEEn.
+                     
+                    </div>
+                </div>
+            </div>
+            <div class="test-info">
+                <p><strong>Score:</strong> 10.0</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-result-passed">
+        <div class="content-wrapper">
+            <div class="test-info">
+                <h2>Test Dialog Output File Groups:</h2>
+            </div>
+            <div class="comparison-container">
+                <div class="section">
+                    <p><strong>Observed:</strong></p>
+                    <div class="content">
+                        ThE ApplE Is rEd.
+ThE bAnAnA Is yEllOw.
+ThE pEAr Is grEEn.
+                     
+                    </div>
+                </div>
+                <div class="section">
+                    <p><strong>Expected:</strong></p>
+                    <div class="content">
+                        ThE ApplE Is rEd.
+ThE bAnAnA Is yEllOw.
+ThE pEAr Is grEEn.
+                     
+                    </div>
+                </div>
+            </div>
+            <div class="test-info">
+                <p><strong>Score:</strong> 10.0</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-result-failed">
+        <div class="content-wrapper">
+            <div class="test-info">
+                <h2>Test Dialog Should Fail:</h2>
+            </div>
+            <div class="comparison-container">
+                <div class="section">
+                    <p><strong>Observed:</strong></p>
+                    <div class="content">
+                        My args are ['script_for_dialog_<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">f</span>a<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">ils.py', 'wo</span>o<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">t', '7', 'foo</span>b<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">a</span>r<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">']
+Number:7
+The banana is 7
+Number:8
+A</span>n<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">oth</span>er <span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">numbe</span><span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">r is 234
+</span>
+                    </div>
+                </div>
+                <div class="section">
+                    <p><strong>Expected:</strong></p>
+                    <div class="content">
+                        My args are ['script_for_dialog_<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">p</span>a<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">sses.py', 'w</span>o<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">ot', '7']
+Num</span>b<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">e</span>r<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">: 7
+The number is 7
+Number: 8
+Another </span>n<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">umb</span>er <span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">is 8
+</span>
+                    </div>
+                </div>
+            </div>
+            <div class="test-info">
+                <p><strong>Score:</strong> 0.0</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-result-failed">
+        <div class="content-wrapper">
+            <div class="test-info">
+                <h2>Test Dialog Expects More Input Should Fail:</h2>
+            </div>
+            <div class="comparison-container">
+                <div class="section">
+                    <p><strong>Observed:</strong></p>
+                    <div class="content">
+                        My args are ['script_for_dialog_passes.py', 'woot']
+Number: 7
+The number is 7
+Number: 8
+Another number is 8
+
+                    </div>
+                </div>
+                <div class="section">
+                    <p><strong>Expected:</strong></p>
+                    <div class="content">
+                        My args are ['script_for_dialog_passes.py', 'woot']
+Number: 7
+The number is 7
+Number: 8
+Another number is 8
+<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">Number: 9
+Yep: 9
+</span>
+                    </div>
+                </div>
+            </div>
+            <div class="test-info">
+                <p><strong>Score:</strong> 0.0</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-result-failed">
+        <div class="content-wrapper">
+            <div class="test-info">
+                <h2>Test Dialog Expects Less Input Should Fail:</h2>
+            </div>
+            <div class="comparison-container">
+                <div class="section">
+                    <p><strong>Observed:</strong></p>
+                    <div class="content">
+                        My args are ['script_for_dialog_passes.py', 'woot']
+Number: 7
+The number is 7
+<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">Nu</span><span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">mber: 
+Exception: input() called more times than expected
+  File "script_for_dialog_passes.py", line 12, in <module>
+    num = get_number()
+          ^^^^^^^^^^^^
+  File "script_for_dialog_passes.py", line 5, in get_number
+    return input('Number: ')
+           ^^^^^^^^^^^^^^^^^
+  File "/Users/robbykapua/Documents/GitHub/beanlab-dev/byu_pytest_utils/byu_pytest_utils/dialog.py", line 380, in _py_input
+    raise Exception("input() called more times than expected")
+Exception: input() called more times than expected
+</span>
+                    </div>
+                </div>
+                <div class="section">
+                    <p><strong>Expected:</strong></p>
+                    <div class="content">
+                        My args are ['script_for_dialog_passes.py', 'woot']
+Number: 7
+The number is 7
+<span style="background-color:rgba(100, 149, 237, 0.8); box-shadow: 0 0 0 rgba(100, 149, 237, 0.8);">  </span>
+                    </div>
+                </div>
+            </div>
+            <div class="test-info">
+                <p><strong>Score:</strong> 5.64</p>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>Generated by HTMLRenderer on May 04, 2025 10:21 PM</p>
+    </footer>
+</body>
+</html>

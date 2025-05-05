@@ -37,12 +37,19 @@
             display: flex;
             flex-direction: column;
         }
-        .test-result {
-            background-color: #f0f0f0;
+        .test-result-passed {
+            background-color: #d4edda;
+            border: 3px solid #c3e6cb;
             padding: 30px;
             border-radius: 10px;
             margin: 40px 75px 40px 75px;
-            border: 1px solid #ddd;
+        }
+        .test-result-failed {
+            background-color: #f8d7da;
+            border: 3px solid #f5c6cb;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 40px 75px 40px 75px;
         }
         .comparison-container {
             display: flex;
@@ -79,8 +86,8 @@
     <header>
         <h1>{{ TEST_FILE }}</h1>
     </header>
-    {% for name, observed, expected, score in COMPARISON_INFO %}
-    <div class="test-result">
+    {% for name, observed, expected, score, status in COMPARISON_INFO %}
+    <div class="test-result-{{ status }}">
         <div class="content-wrapper">
             <div class="test-info">
                 <h2>{{ name }}:</h2>
