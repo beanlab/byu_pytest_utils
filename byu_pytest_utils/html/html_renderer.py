@@ -7,9 +7,9 @@ from datetime import datetime
 from dataclasses import dataclass
 from byu_pytest_utils.edit_dist import edit_dist
 
-RED = "rgba(255, 99, 71, 0.8)"
+BLUE = "rgba(255, 99, 71, 0.4)"
 GREEN = "rgba(50, 205, 50, 0.8)"
-BLUE = "rgba(100, 149, 237, 0.8)"
+RED = "rgba(100, 149, 237, 0.4)"
 
 
 @dataclass
@@ -157,13 +157,11 @@ class HTMLRenderer:
 
 if __name__ == '__main__':
     score1, obs1, exp1 = edit_dist('hello', 'hallo')
-    score2, obs2, exp2 = edit_dist('world', 'word')
-    score3, obs3, exp3 = edit_dist('bob', 'bob')
+    score2, obs2, exp2 = edit_dist('bob', 'bob')
 
     test_comparison_info = [
         ComparisonInfo('Test 1', score1, obs1, exp1, False),
-        ComparisonInfo('Test 2', score2, obs2, exp2, False),
-        ComparisonInfo('Test 3', score3, obs3, exp3, True)
+        ComparisonInfo('Test 3', score2, obs2, exp2, True)
     ]
 
     renderer = HTMLRenderer()
