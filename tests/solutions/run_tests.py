@@ -1,5 +1,4 @@
-import json
-from byu_pytest_utils import run_script, test_files
+from byu_pytest_utils import run_script, test_files, this_folder
 
 # New imports
 from byu_pytest_utils.utils import run_tests
@@ -42,4 +41,4 @@ tests = {
 }
 
 if __name__ == '__main__':
-    run_tests(tests_info=tests, headless=False)
+    run_tests(tests_info=tests, test_dir=this_folder, headless=True)

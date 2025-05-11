@@ -16,9 +16,6 @@ import sys
 
 @dataclass
 class TestInfo:
-    """
-    Class to hold test info
-    """
     name: str
     points: float
     result: dict
@@ -71,9 +68,9 @@ def get_gradescope_results(tests_info, html_report):
     """
     Get the gradescope results from the test_info and html_report
 
-    :param tests_info: TestInfo object
-    :param html_report: HTML report
-    :return: Gradescope results
+    :param tests_info: Dictionary of test information
+    :param html_report: HTML-rendered output from comparison
+    :return: Dictionary in Gradescope-compatible format
     """
 
     _, test_results = next(iter(tests_info.items()))
@@ -92,11 +89,12 @@ def get_gradescope_results(tests_info, html_report):
     }
 
 
-def run_tests(tests_info, headless=False):
+def run_tests(tests_info, test_dir, headless=False):
     """
     Run the tests and return the results
 
     :param tests_info: TestInfo object
+    :param test_dir: Directory where the tests are located
     :param headless: Whether to run the tests in headless mode
     :return: Results of the tests
     """
@@ -105,17 +103,18 @@ def run_tests(tests_info, headless=False):
     renderer = HTMLRenderer()
     render_info = renderer.parse_info(results)
 
-    html_report = renderer.render(
-        test_file_dir=Path(__file__).parent,
-        test_file_name='run_tests.py',
+    renderer.render(
+        test_file_dir=test_dir,
         comparison_info=render_info,
         headless=headless
     )
 
-    gradescope_results = get_gradescope_results(tests_info, html_report)
+    html_results = renderer.get_comparison_results()
+    gradescope_output = get_gradescope_results(tests_info, html_results)
 
-    with open('results.json', 'w') as f:
-        json.dump(gradescope_results, f, indent=2)
+    if headless:
+        with open('results.json', 'w') as f:
+            json.dump(gradescope_output, f, indent=2)
 
 
 def ensure_missing(file: Union[Path, str]):
