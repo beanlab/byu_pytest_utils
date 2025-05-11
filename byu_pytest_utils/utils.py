@@ -1,13 +1,27 @@
 import importlib
+import json
 import os.path
 import runpy
 from functools import wraps
 from pathlib import Path
 import inspect
 from typing import Union
+from dataclasses import dataclass
+
+from byu_pytest_utils.html.html_renderer import HTMLRenderer
 
 import pytest
 import sys
+
+
+@dataclass
+class TestInfo:
+    """
+    Class to hold test info
+    """
+    name: str
+    points: float
+    result: dict
 
 
 def run_python_script(script, *args, module='__main__'):
@@ -33,6 +47,75 @@ def run_python_script(script, *args, module='__main__'):
         'input': _input
     }
     return runpy.run_path(script, _globals, module)
+
+
+def get_results(test_results):
+    return {
+        'tests': [
+            {
+                'name': test_data['name'],
+                'expected': group_result.get('expected', ''),
+                'observed': group_result.get('observed', ''),
+                'score': round(group_result['score'] * test_data['points'], 3),
+                'max_score': round(group_result['max_score'] * test_data['points'], 3),
+                'passed': group_result['passed'],
+            }
+            for binary_name, binary_results in test_results.items()
+            for test_data in binary_results
+            for group_name, group_result in test_data['result'].items()
+        ]
+    }
+
+
+def get_gradescope_results(tests_info, html_report):
+    """
+    Get the gradescope results from the test_info and html_report
+
+    :param tests_info: TestInfo object
+    :param html_report: HTML report
+    :return: Gradescope results
+    """
+
+    _, test_results = next(iter(tests_info.items()))
+
+    return {
+        'tests': [
+            {
+                'name': test_result['name'],
+                'output': report,
+                'score': round(test_result['points'], 3),
+                'max_score': round(test_result['points'], 3),
+                'visibility': 'visible',
+            }
+            for test_result, report in zip(test_results, html_report)
+        ]
+    }
+
+
+def run_tests(tests_info, headless=False):
+    """
+    Run the tests and return the results
+
+    :param tests_info: TestInfo object
+    :param headless: Whether to run the tests in headless mode
+    :return: Results of the tests
+    """
+    results = get_results(tests_info)
+
+    renderer = HTMLRenderer()
+    render_info = renderer.parse_info(results)
+
+    html_report = renderer.render(
+        test_file_dir=Path(__file__).parent,
+        test_file_name='run_tests.py',
+        comparison_info=render_info,
+        headless=headless
+    )
+
+    gradescope_results = get_gradescope_results(tests_info, html_report)
+
+    with open('results.json', 'w') as f:
+        json.dump(gradescope_results, f, indent=2)
 
 
 def ensure_missing(file: Union[Path, str]):

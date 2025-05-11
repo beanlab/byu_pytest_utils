@@ -4,6 +4,7 @@ import jinja2 as jj
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
+from bs4 import BeautifulSoup
 from dataclasses import dataclass
 from byu_pytest_utils.edit_dist import edit_dist
 
@@ -16,6 +17,7 @@ RED = "rgba(100, 149, 237, 0.4)"
 class ComparisonInfo:
     test_name: str
     score: float
+    max_score: float
     observed: str
     expected: str
     passed: bool
@@ -31,8 +33,8 @@ class HTMLRenderer:
         test_file_name: str,
         comparison_info: list[ComparisonInfo],
         gap: str = '~',
-        open_in_browser: bool = True
-    ) -> str:
+        headless: bool = True
+    ) -> str | list[str]:
         """
         Generate and optionally open an HTML file showing a comparison between observed and expected values.
         """
@@ -51,7 +53,7 @@ class HTMLRenderer:
             'TEST_FILE': file_name,
             'COMPARISON_INFO': [
                 (
-                    info.test_name,
+                    info.test_name.replace('_', ' ').replace('-', ' ').title(),
                     *self._build_comparison_strings(info.observed, info.expected, gap),
                     info.score,
                     'passed' if info.passed else 'failed',
@@ -60,8 +62,8 @@ class HTMLRenderer:
             ],
             'TESTS_PASSED': sum(info.passed for info in comparison_info),
             'TOTAL_TESTS': len(comparison_info),
-            'TOTAL_SCORE': sum(info.score for info in comparison_info),
-            'TOTAL_POSSIBLE_SCORE': len(comparison_info) * 10,
+            'TOTAL_SCORE': round(sum(info.score for info in comparison_info), 1),
+            'TOTAL_POSSIBLE_SCORE': sum(info.max_score for info in comparison_info),
             'TIME': datetime.now().strftime("%B %d, %Y %I:%M %p")
         }
 
@@ -74,9 +76,57 @@ class HTMLRenderer:
 
         # Open in browser if required
         url = f'file://{self.quote(str(result_path))}'
-        if open_in_browser:
+        if headless:
+            return self.get_comparisons(html_content)
+        else:
             webbrowser.open(url)
-        return url
+            return url
+
+
+    @staticmethod
+    def parse_info(results: dict) -> list[ComparisonInfo]:
+        """
+        Parse the results dictionary and extract comparison information.
+        """
+        comparison_info = []
+
+        assert len(results) == 1
+
+        for _, test_results in results.items():
+
+            for test_result in test_results:
+                test_name = test_result.get('name', '')
+                score = test_result.get('score', 0)
+                max_score = test_result.get('max_score', 0)
+                observed = test_result.get('observed', '')
+                expected = test_result.get('expected', '')
+                passed = test_result.get('passed', False)
+
+                comparison_info.append(
+                    ComparisonInfo(test_name, score, max_score, observed, expected, passed)
+                )
+        return comparison_info
+
+
+    @staticmethod
+    def get_comparisons(html_content: str) -> list[str]:
+        """
+        Extracts the observed and expected values from the HTML content.
+        """
+        comparisons = []
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        test_results = soup.find_all('div', class_='test-result-passed')
+        for test_result in test_results:
+            comparisons.append(str(test_result))
+
+        test_results = soup.find_all('div', class_='test-result-failed')
+        for test_result in test_results:
+            comparisons.append(str(test_result))
+
+        return comparisons
+
 
     @staticmethod
     def _build_comparison_strings(obs: str, exp: str, gap: str) -> tuple[str, str]:
