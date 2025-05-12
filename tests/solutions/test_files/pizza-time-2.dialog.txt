@@ -1,0 +1,5 @@
+Welcome to Papa John's!
+What is your name? <<Peter>>
+What kind of pizza do you want? <<Pepperoni>>
+What toppings do you want? <<bacon>>
+``Peter wants a Pepperoni pizza with bacon!;output;80``

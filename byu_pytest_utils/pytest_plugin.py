@@ -1,5 +1,8 @@
-import pytest
+import re
 import json
+import pytest
+
+from byu_pytest_utils.html.html_renderer import HTMLRenderer, ComparisonInfo
 
 metadata = {}
 test_group_stats = {}
@@ -70,6 +73,8 @@ def pytest_pyfunc_call(pyfuncitem):
             and excinfo[0] is AssertionError \
             and hasattr(excinfo[1], '_partial_credit'):
         metadata[pyfuncitem._obj]['partial_credit'] = excinfo[1]._partial_credit
+
+
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus):

@@ -1,0 +1,24 @@
+{
+    "test_cases": [
+        {
+            "name": "Test 1",
+            "points": 10,
+            "type": "dialog",
+            "settings": {
+                "dialog_file": "",
+                "script": "",
+                "script_args": []
+            }
+        },
+        {
+            "name": "Test 2",
+            "points": 10,
+            "type": "dialog",
+            "settings": {
+                "dialog_file": "",
+                "script": "",
+                "script_args": []
+            }
+        }
+    ]
+}

@@ -6,6 +6,7 @@ import subprocess as sp
 import sys
 import traceback
 import warnings
+from collections import defaultdict
 from functools import wraps
 from pathlib import Path
 from typing import Union
@@ -19,6 +20,7 @@ GAP = '~'
 
 PS = Union[Path, str]
 
+TEST_RESULTS = defaultdict(list)
 
 def _make_group_stats_decorator(group_stats):
     def decorator(func):
@@ -27,7 +29,6 @@ def _make_group_stats_decorator(group_stats):
             group_stat = group_stats[group_name]
             if not group_stat['passed']:
                 assert group_stat['observed'] == group_stat['expected']
-
         new_func._group_stats = group_stats
         new_func.__name__ = func.__name__
         new_func.__module__ = func.__module__
