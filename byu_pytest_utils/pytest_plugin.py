@@ -75,45 +75,6 @@ def pytest_pyfunc_call(pyfuncitem):
         metadata[pyfuncitem._obj]['partial_credit'] = excinfo[1]._partial_credit
 
 
-def pytest_sessionfinish(session, exitstatus):
-    """
-    Hook to render the HTML file after all tests are finished.
-    """
-    terminalreporter = session.config.pluginmanager.getplugin('terminalreporter')
-
-    all_tests = []
-    if 'passed' in terminalreporter.stats:
-        all_tests += terminalreporter.stats['passed']
-    if 'failed' in terminalreporter.stats:
-        all_tests += terminalreporter.stats['failed']
-
-    comparison_info = []
-    for s in all_tests:
-        test_file_name = s.nodeid.split('::')[0]
-        test_case_name = re.sub(r'\[.*]$', '', s.nodeid.split('::')[1])
-
-        group_stats_key = s.nodeid.split('/')[-1]
-        group_stats = test_group_stats[group_stats_key]
-
-        max_score = group_stats['max_score']
-        score = group_stats.get('score', max_score if s.passed else 0)
-
-        comparison_info.append(
-            ComparisonInfo(
-                test_name=test_case_name.replace('_', ' ').title(),
-                score=round(score, 4),
-                observed=group_stats['observed'],
-                expected=group_stats['expected'],
-                passed=group_stats['passed']
-            )
-        )
-
-    renderer = HTMLRenderer()
-    renderer.render(
-        test_file_dir=session.path,
-        test_file_name=test_file_name,
-        comparison_info=comparison_info,
-    )
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus):
