@@ -109,10 +109,10 @@ def run_tests(tests_info, test_dir, headless=False):
         headless=headless
     )
 
-    html_results = renderer.get_comparison_results()
-    gradescope_output = get_gradescope_results(tests_info, html_results)
-
     if headless:
+        html_results = renderer.get_comparison_results()
+        gradescope_output = get_gradescope_results(tests_info, html_results)
+
         with open('results.json', 'w') as f:
             json.dump(gradescope_output, f, indent=2)
 
