@@ -43,6 +43,7 @@ class HTMLRenderer:
                     info.test_name.replace('_', ' ').replace('-', ' ').title(),
                     *self._build_comparison_strings(info.observed, info.expected, gap),
                     info.score,
+                    info.max_score,
                     'passed' if info.passed else 'failed',
                 )
                 for info in comparison_info
