@@ -41,4 +41,4 @@ tests = {
 }
 
 if __name__ == '__main__':
-    run_tests(tests_info=tests, test_dir=this_folder, headless=True)
+    run_tests(tests_info=tests, test_dir=this_folder)

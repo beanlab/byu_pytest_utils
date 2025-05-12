@@ -7,6 +7,7 @@ from pathlib import Path
 import inspect
 from typing import Union
 from dataclasses import dataclass
+import webbrowser
 
 from byu_pytest_utils.html.html_renderer import HTMLRenderer
 
@@ -89,13 +90,17 @@ def get_gradescope_results(tests_info, html_report):
     }
 
 
-def run_tests(tests_info, test_dir, headless=False):
+def quote(url: str) -> str:
+    """Escape characters in file path for browser compatibility."""
+    return url.replace(' ', '%20').replace('\\', '/')
+
+
+def run_tests(tests_info, test_dir):
     """
     Run the tests and return the results
 
     :param tests_info: TestInfo object
     :param test_dir: Directory where the tests are located
-    :param headless: Whether to run the tests in headless mode
     :return: Results of the tests
     """
     results = get_results(tests_info)
@@ -103,14 +108,19 @@ def run_tests(tests_info, test_dir, headless=False):
     renderer = HTMLRenderer()
     render_info = renderer.parse_info(results)
 
-    renderer.render(
-        test_file_dir=test_dir,
-        comparison_info=render_info,
-        headless=headless
+    html_content = renderer.render(
+        comparison_info=render_info
     )
 
-    if headless:
-        html_results = renderer.get_comparison_results()
+    headless = os.getenv('HEADLESS')
+
+    if not headless:
+        result_path = test_dir / 'test_results.html'
+        result_path.write_text(html_content, encoding='utf-8')
+        webbrowser.open(f'file://{quote(str(result_path))}')
+
+    else:
+        html_results = renderer.get_comparison_results(html_content=html_content)
         gradescope_output = get_gradescope_results(tests_info, html_results)
 
         with open('results.json', 'w') as f:

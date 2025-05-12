@@ -1,4 +1,3 @@
-import webbrowser
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -29,11 +28,9 @@ class HTMLRenderer:
 
     def render(
         self,
-        test_file_dir: Path,
         comparison_info: list[ComparisonInfo],
         gap: str = '~',
-        headless: bool = True
-    ) -> None:
+    ) -> str:
         """Render HTML file with test comparison info and optionally open it."""
         if not self._html_template.exists():
             raise FileNotFoundError(f"Template not found at {self._html_template}")
@@ -57,19 +54,15 @@ class HTMLRenderer:
             'TIME': datetime.now().strftime("%B %d, %Y %I:%M %p")
         }
 
-        self.html_content = jj.Template(template).render(**jinja_args)
+        html_content = jj.Template(template).render(**jinja_args)
 
-        if not headless:
-            result_path = test_file_dir / 'test_results.html'
-            result_path.write_text(self.html_content, encoding='utf-8')
-            webbrowser.open(f'file://{self.quote(str(result_path))}')
+        return html_content
 
-    def get_comparison_results(self) -> list[str]:
+    @staticmethod
+    def get_comparison_results(html_content) -> list[str]:
         """Extract and return HTML strings of passed and failed test results."""
-        if not self.html_content:
-            return []
 
-        soup = BeautifulSoup(self.html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, 'html.parser')
         results = []
 
         for cls in ['test-result-passed', 'test-result-failed']:
@@ -147,8 +140,3 @@ class HTMLRenderer:
             expected += wrap_span(exp[len(obs):], BLUE)
 
         return observed, expected
-
-    @staticmethod
-    def quote(url: str) -> str:
-        """Escape characters in file path for browser compatibility."""
-        return url.replace(' ', '%20').replace('\\', '/')
