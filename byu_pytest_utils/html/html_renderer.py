@@ -62,13 +62,42 @@ class HTMLRenderer:
 
     @staticmethod
     def get_comparison_results(html_content) -> list[str]:
-        """Extract and return HTML strings of passed and failed test results."""
+        """Extract and return HTML strings of passed and failed test results with inline styles."""
 
         soup = BeautifulSoup(html_content, 'html.parser')
         results = []
 
-        for cls in ['comparison-container']:
-            results.extend(str(div) for div in soup.find_all('div', class_=cls))
+        # Find all .comparison-container divs
+        for container in soup.find_all('div', class_='comparison-container'):
+            # Inline styles for .comparison-container
+            container['style'] = (
+                "display: flex; "
+                "flex-wrap: wrap; "
+                "justify-content: space-between; "
+                "gap: 10px; "
+                "margin-bottom: 10px; "
+                "padding: 0 10px;"
+            )
+
+            # Inline styles for .section and its children
+            for section in container.find_all('div', class_='section'):
+                section['style'] = "flex: 1 1 300px; min-width: 0;"
+
+                strong = section.find('strong')
+                if strong:
+                    strong['style'] = "font-size: 1em;"
+
+                content = section.find('div', class_='content')
+                if content:
+                    content['style'] = (
+                        "background: rgb(245, 245, 245); "
+                        "padding: 10px; "
+                        "border: 1px solid #ddd; "
+                        "border-radius: 3px; "
+                        "overflow-x: auto;"
+                    )
+
+            results.append(str(container))
 
         return results
 
