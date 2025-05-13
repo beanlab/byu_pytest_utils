@@ -12,7 +12,7 @@ BLUE = "rgba(100, 149, 237, 0.4)"     # extra in expected
 
 
 @dataclass
-class ComparisonInfo:
+class TestResults:
     test_name: str
     score: float
     max_score: float
@@ -23,12 +23,12 @@ class ComparisonInfo:
 
 class HTMLRenderer:
     def __init__(self, template_path: Optional[Path] = None):
-        self.html_content: Optional[str] = None
         self._html_template = template_path or Path(__file__).parent / 'template.html.jinja'
 
     def render(
         self,
-        comparison_info: list[ComparisonInfo],
+        test_file_name: str,
+        test_results: list[TestResults],
         gap: str = '~',
     ) -> str:
         """Render HTML file with test comparison info and optionally open it."""
@@ -38,6 +38,7 @@ class HTMLRenderer:
         template = self._html_template.read_text(encoding="utf-8")
 
         jinja_args = {
+            'TEST_NAME': Path(test_file_name).stem.replace('_', ' ').replace('-', ' ').title(),
             'COMPARISON_INFO': [
                 (
                     info.test_name.replace('_', ' ').replace('-', ' ').title(),
@@ -46,12 +47,12 @@ class HTMLRenderer:
                     info.max_score,
                     'passed' if info.passed else 'failed',
                 )
-                for info in comparison_info
+                for info in test_results
             ],
-            'TESTS_PASSED': sum(info.passed for info in comparison_info),
-            'TOTAL_TESTS': len(comparison_info),
-            'TOTAL_SCORE': round(sum(info.score for info in comparison_info), 1),
-            'TOTAL_POSSIBLE_SCORE': sum(info.max_score for info in comparison_info),
+            'TESTS_PASSED': sum(info.passed for info in test_results),
+            'TOTAL_TESTS': len(test_results),
+            'TOTAL_SCORE': round(sum(info.score for info in test_results), 1),
+            'TOTAL_POSSIBLE_SCORE': sum(info.max_score for info in test_results),
             'TIME': datetime.now().strftime("%B %d, %Y %I:%M %p")
         }
 
@@ -66,13 +67,13 @@ class HTMLRenderer:
         soup = BeautifulSoup(html_content, 'html.parser')
         results = []
 
-        for cls in ['test-result-passed', 'test-result-failed']:
+        for cls in ['comparison-container']:
             results.extend(str(div) for div in soup.find_all('div', class_=cls))
 
         return results
 
     @staticmethod
-    def parse_info(results: dict) -> list[ComparisonInfo]:
+    def parse_info(results: dict) -> list[TestResults]:
         """Convert test result dictionary into a list of ComparisonInfo."""
         if len(results) != 1:
             raise ValueError("Expected exactly one key in results dictionary.")
@@ -80,7 +81,7 @@ class HTMLRenderer:
         comparison_info = []
         for test_results in results.values():
             for result in test_results:
-                comparison_info.append(ComparisonInfo(
+                comparison_info.append(TestResults(
                     test_name=result.get('name', ''),
                     score=result.get('score', 0),
                     max_score=result.get('max_score', 0),
@@ -94,50 +95,18 @@ class HTMLRenderer:
     @staticmethod
     def _build_comparison_strings(obs: str, exp: str, gap: str) -> tuple[str, str]:
         """Return observed and expected strings with HTML span highlighting."""
-        def wrap_span(text: str, color: Optional[str]) -> str:
-            return f'<span style="background-color:{color}; box-shadow: 0 0 0 {color};">{text}</span>' if text else ''
-
         observed, expected = '', ''
-        curr_obs, curr_exp = '', ''
-        obs_color, exp_color = None, None
 
         for o, e in zip(obs, exp):
-            if o == gap:
-                if obs_color != GREEN:
-                    observed += wrap_span(curr_obs, obs_color)
-                    curr_obs, obs_color = o, GREEN
-                else:
-                    curr_obs += o
+            if o == e:
+                observed += o
+                expected += e
+            elif o == gap:
+                expected += f'<span style="background-color: {RED}">{e}</span>'
             elif e == gap:
-                if exp_color != RED:
-                    expected += wrap_span(curr_exp, exp_color)
-                    curr_exp, exp_color = e, RED
-                else:
-                    curr_exp += e
-            elif o != e:
-                if obs_color != BLUE:
-                    observed += wrap_span(curr_obs, obs_color)
-                    curr_obs, obs_color = o, BLUE
-                else:
-                    curr_obs += o
-
-                if exp_color != BLUE:
-                    expected += wrap_span(curr_exp, exp_color)
-                    curr_exp, exp_color = e, BLUE
-                else:
-                    curr_exp += e
+                observed += f'<span style="background-color: {GREEN}">{o}</span>'
             else:
-                observed += wrap_span(curr_obs, obs_color) + o
-                expected += wrap_span(curr_exp, exp_color) + e
-                curr_obs, curr_exp = '', ''
-                obs_color = exp_color = None
-
-        observed += wrap_span(curr_obs, obs_color)
-        expected += wrap_span(curr_exp, exp_color)
-
-        if len(obs) > len(exp):
-            observed += wrap_span(obs[len(exp):], BLUE)
-        elif len(exp) > len(obs):
-            expected += wrap_span(exp[len(obs):], BLUE)
+                observed += f'<span style="background-color: {BLUE}">{o}</span>'
+                expected += f'<span style="background-color: {BLUE}">{e}</span>'
 
         return observed, expected
