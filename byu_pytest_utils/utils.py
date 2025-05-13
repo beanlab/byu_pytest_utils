@@ -7,9 +7,8 @@ from pathlib import Path
 import inspect
 from typing import Union
 from dataclasses import dataclass
-import webbrowser
 
-from byu_pytest_utils.html.html_renderer import HTMLRenderer
+from byu_pytest_utils.html.html_renderer import TestResults
 
 import pytest
 import sys
@@ -47,45 +46,24 @@ def run_python_script(script, *args, module='__main__'):
     return runpy.run_path(script, _globals, module)
 
 
-def get_results(test_results):
-    return {
-        'tests': [
-            {
-                'name': test_data['name'],
-                'expected': group_result.get('expected', ''),
-                'observed': group_result.get('observed', ''),
-                'score': round(group_result['score'] * test_data['points'], 3),
-                'max_score': round(group_result['max_score'] * test_data['points'], 3),
-                'passed': group_result['passed'],
-            }
-            for binary_name, binary_results in test_results.items()
-            for test_data in binary_results
-            for group_name, group_result in test_data['result'].items()
-        ]
-    }
-
-
-def get_gradescope_results(tests_info, html_report):
+def get_gradescope_results(test_results:list[TestResults], html_results):
     """
-    Get the gradescope results from the test_info and html_report
+    Get the gradescope results from the test_info and html_results
 
-    :param tests_info: Dictionary of test information
-    :param html_report: HTML-rendered output from comparison
+    :param test_results: Dictionary of test information
+    :param html_results: HTML-rendered output from comparison
     :return: Dictionary in Gradescope-compatible format
     """
-
-    _, test_results = next(iter(tests_info.items()))
-
     return {
         'tests': [
             {
-                'name': test_result['name'],
+                'name': test_result.test_name,
                 'output': report,
-                'score': round(test_result['points'], 3),
-                'max_score': round(test_result['points'], 3),
+                'score': round(test_result.score, 3),
+                'max_score': round(test_result.max_score, 3),
                 'visibility': 'visible',
             }
-            for test_result, report in zip(test_results, html_report)
+            for test_result, report in zip(test_results, html_results)
         ]
     }
 
@@ -93,38 +71,6 @@ def get_gradescope_results(tests_info, html_report):
 def quote(url: str) -> str:
     """Escape characters in file path for browser compatibility."""
     return url.replace(' ', '%20').replace('\\', '/')
-
-
-def run_tests(tests_info, test_dir):
-    """
-    Run the tests and return the results
-
-    :param tests_info: TestInfo object
-    :param test_dir: Directory where the tests are located
-    :return: Results of the tests
-    """
-    results = get_results(tests_info)
-
-    renderer = HTMLRenderer()
-    render_info = renderer.parse_info(results)
-
-    html_content = renderer.render(
-        comparison_info=render_info
-    )
-
-    headless = os.getenv('HEADLESS')
-
-    if not headless:
-        result_path = test_dir / 'test_results.html'
-        result_path.write_text(html_content, encoding='utf-8')
-        webbrowser.open(f'file://{quote(str(result_path))}')
-
-    else:
-        html_results = renderer.get_comparison_results(html_content=html_content)
-        gradescope_output = get_gradescope_results(tests_info, html_results)
-
-        with open('results.json', 'w') as f:
-            json.dump(gradescope_output, f, indent=2)
 
 
 def ensure_missing(file: Union[Path, str]):

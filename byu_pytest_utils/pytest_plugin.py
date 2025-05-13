@@ -1,8 +1,11 @@
+import os
 import re
 import json
 import pytest
+import webbrowser
 
-from byu_pytest_utils.html.html_renderer import HTMLRenderer, ComparisonInfo
+from byu_pytest_utils.html.html_renderer import HTMLRenderer, TestResults
+from byu_pytest_utils.utils import get_gradescope_results, quote
 
 metadata = {}
 test_group_stats = {}
@@ -75,39 +78,66 @@ def pytest_pyfunc_call(pyfuncitem):
         metadata[pyfuncitem._obj]['partial_credit'] = excinfo[1]._partial_credit
 
 
-
-
-def pytest_terminal_summary(terminalreporter, exitstatus):
-    json_results = {'tests': []}
-
-    all_tests = []
-    if 'passed' in terminalreporter.stats:
-        all_tests = all_tests + terminalreporter.stats['passed']
-    if 'failed' in terminalreporter.stats:
-        all_tests = all_tests + terminalreporter.stats['failed']
-
+def parse_info(all_tests):
+    """
+    Convert test result dictionary into a list of ComparisonInfo.
+    """
+    comparison_info = []
     for s in all_tests:
-        output = s.capstdout + '\n' + s.capstderr
-        # The group stats key is the name of the test (eg test_lab08.py::test_get_and_set)
-        # However s.nodeid includes the full relative path to test (causing Key Error)
-        # The following line takes that rel path from s.nodeid and extracts just filename
+        test_case_name = re.sub(r'\[.*]$', '', s.nodeid.split('::')[1])
+
         group_stats_key = s.nodeid.split('/')[-1]
         group_stats = test_group_stats[group_stats_key]
 
         max_score = group_stats['max_score']
         score = group_stats.get('score', max_score if s.passed else 0)
 
-        output += s.longreprtext
-
-        json_results["tests"].append(
-            {
-                'score': round(score, 4),
-                'max_score': round(max_score, 4),
-                'name': group_stats_key,
-                'output': output,
-                'visibility': 'visible',
-            }
+        comparison_info.append(
+            TestResults(
+                test_name=test_case_name.replace('_', ' ').title(),
+                score=round(score, 4),
+                max_score=round(max_score, 4),
+                observed=group_stats['observed'],
+                expected=group_stats['expected'],
+                passed=group_stats['passed']
+            )
         )
 
-    with open('results.json', 'w') as results:
-        results.write(json.dumps(json_results, indent=4))
+    return comparison_info
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """
+    Hook to render the HTML file after all tests are finished.
+    """
+    terminalreporter = session.config.pluginmanager.getplugin('terminalreporter')
+
+    all_tests = []
+    if 'passed' in terminalreporter.stats:
+        all_tests += terminalreporter.stats['passed']
+    if 'failed' in terminalreporter.stats:
+        all_tests += terminalreporter.stats['failed']
+
+    test_file_name = session.config.args[0].split('/')[-1].split('.')[0]
+
+    test_results = parse_info(all_tests)
+
+    renderer = HTMLRenderer()
+    html_content = renderer.render(
+        test_file_name=test_file_name,
+        test_results=test_results,
+    )
+
+    headless = os.getenv('HEADLESS')
+
+    if not headless:
+        result_path = session.path / f'{test_file_name}_results.html'
+        result_path.write_text(html_content, encoding='utf-8')
+        webbrowser.open(f'file://{quote(str(result_path))}')
+
+    else:
+        html_results = renderer.get_comparison_results(html_content=html_content)
+        gradescope_output = get_gradescope_results(test_results, html_results)
+
+        with open('results.json', 'w') as f:
+            json.dump(gradescope_output, f, indent=2)

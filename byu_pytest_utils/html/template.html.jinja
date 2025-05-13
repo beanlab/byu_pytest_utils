@@ -4,84 +4,115 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comparison Report</title>
-<style>
-    html, body {
-        height: 100%;
-        margin: 0;
-    }
-    body {
-        display: flex;
-        flex-direction: column;
-        font-family: Arial, sans-serif;
-        line-height: 1.4;
-        background-color: #f9f9f9;
-        color: rgb(0, 46, 93);
-    }
-    header, footer {
-        background-color: rgb(0, 46, 93);
-        color: white;
-        text-align: center;
-    }
-    header h1, footer p {
-        margin: 0;
-        padding: 5px 0;
-    }
-    h2 {
-        padding: 5px 0;
-    }
-    .test-summary {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin: 5px 10px;
-        font-size: 1em;
-        font-weight: bold;
-    }
-    .content-wrapper {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-    }
-    .test-result-passed, .test-result-failed {
-        padding: 5px;
-        border-radius: 5px;
-        margin: 20px 50px;
-    }
-    .test-result-passed {
-        background-color: #d4edda;
-        border: 2px solid #c3e6cb;
-    }
-    .test-result-failed {
-        background-color: #f8d7da;
-        border: 2px solid #f5c6cb;
-    }
-    .comparison-container {
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-        margin: 10px;
-    }
-    .section {
-        flex: 1;
-    }
-    .section strong {
-        font-size: 1em;
-    }
-    .content {
-        background: rgb(245, 245, 245);
-        padding: 10px;
-        border: 1px solid #ddd;
-        border-radius: 3px;
-        overflow-x: auto;
-    }
-    .test-info {
-        margin: 5px 10px;
-    }
-</style>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            font-family: Arial, sans-serif;
+            line-height: 1.4;
+            background-color: #f9f9f9;
+            color: rgb(0, 46, 93);
+        }
+        header, footer {
+            background-color: rgb(0, 46, 93);
+            color: white;
+            text-align: center;
+        }
+        header h1, footer p {
+            margin: 0;
+            padding: 5px 0;
+        }
+        header {
+            margin-bottom: 10px;
+        }
+        footer {
+            margin-top: 10px;
+        }
+        h2 {
+            padding: 5px 0;
+        }
+        .test-summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 50px;
+            font-size: 1em;
+            font-weight: bold;
+        }
+        .content-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .test-result-passed, .test-result-failed {
+            padding: 5px;
+            border-radius: 5px;
+            margin: 10px 50px;
+            position: relative;
+        }
+        .test-result-passed {
+            background-color: #d4edda;
+            border: 2px solid #c3e6cb;
+        }
+        .test-result-failed {
+            background-color: #f8d7da;
+            border: 2px solid #f5c6cb;
+        }
+        .result-header {
+            text-align: center;
+        }
+        .result-header h2 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        .result-subheader {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 5px;
+            font-size: 1em;
+            padding: 0 10px; /* Add padding to align with comparison divs */
+        }
+        .result-subheader .status, .result-subheader .score {
+            font-size: 1em;
+        }
+        .result-subheader .status h2, .result-subheader .score h2 {
+            display: inline;
+            font-size: 1em;
+            margin-right: 5px;
+        }
+        .comparison-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 0 10px; /* Ensure alignment with subheader */
+        }
+        .section {
+            flex: 1;
+        }
+        .section strong {
+            font-size: 1em;
+        }
+        .content {
+            background: rgb(245, 245, 245);
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+        .test-info {
+            margin: 5px 10px;
+        }
+    </style>
 </head>
 <body>
     <header>
-        <h1>Test Results</h1>
+        <h1>{{ TEST_NAME }} Results</h1>
     </header>
     <div class="test-summary">
         <span>Passed: {{ TESTS_PASSED }} / {{ TOTAL_TESTS }}</span>
@@ -90,8 +121,16 @@
     {% for name, observed, expected, score, max_score, status in COMPARISON_INFO %}
     <div class="test-result-{{ status }}">
         <div class="content-wrapper">
-            <div class="test-info">
+            <div class="result-header">
                 <h2>{{ name }}</h2>
+                <div class="result-subheader">
+                    <div class="status">
+                        <h2>Status:</h2> {{ status.title() }}
+                    </div>
+                    <div class="score">
+                        <h2>Score:</h2> {{ score }} / {{ max_score }}
+                    </div>
+                </div>
             </div>
             <div class="comparison-container">
                 <div class="section">
@@ -106,9 +145,6 @@
                         {{ expected }}
                     </div>
                 </div>
-            </div>
-            <div class="test-info">
-                <p><strong>Score:</strong> {{ score }} / {{ max_score }}</p>
             </div>
         </div>
     </div>

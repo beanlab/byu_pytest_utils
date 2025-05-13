@@ -12,7 +12,7 @@ BLUE = "rgba(100, 149, 237, 0.4)"     # extra in expected
 
 
 @dataclass
-class ComparisonInfo:
+class TestResults:
     test_name: str
     score: float
     max_score: float
@@ -23,12 +23,12 @@ class ComparisonInfo:
 
 class HTMLRenderer:
     def __init__(self, template_path: Optional[Path] = None):
-        self.html_content: Optional[str] = None
         self._html_template = template_path or Path(__file__).parent / 'template.html.jinja'
 
     def render(
         self,
-        comparison_info: list[ComparisonInfo],
+        test_file_name: str,
+        test_results: list[TestResults],
         gap: str = '~',
     ) -> str:
         """Render HTML file with test comparison info and optionally open it."""
@@ -38,6 +38,7 @@ class HTMLRenderer:
         template = self._html_template.read_text(encoding="utf-8")
 
         jinja_args = {
+            'TEST_NAME': Path(test_file_name).stem.replace('_', ' ').replace('-', ' ').title(),
             'COMPARISON_INFO': [
                 (
                     info.test_name.replace('_', ' ').replace('-', ' ').title(),
@@ -46,12 +47,12 @@ class HTMLRenderer:
                     info.max_score,
                     'passed' if info.passed else 'failed',
                 )
-                for info in comparison_info
+                for info in test_results
             ],
-            'TESTS_PASSED': sum(info.passed for info in comparison_info),
-            'TOTAL_TESTS': len(comparison_info),
-            'TOTAL_SCORE': round(sum(info.score for info in comparison_info), 1),
-            'TOTAL_POSSIBLE_SCORE': sum(info.max_score for info in comparison_info),
+            'TESTS_PASSED': sum(info.passed for info in test_results),
+            'TOTAL_TESTS': len(test_results),
+            'TOTAL_SCORE': round(sum(info.score for info in test_results), 1),
+            'TOTAL_POSSIBLE_SCORE': sum(info.max_score for info in test_results),
             'TIME': datetime.now().strftime("%B %d, %Y %I:%M %p")
         }
 
@@ -72,7 +73,7 @@ class HTMLRenderer:
         return results
 
     @staticmethod
-    def parse_info(results: dict) -> list[ComparisonInfo]:
+    def parse_info(results: dict) -> list[TestResults]:
         """Convert test result dictionary into a list of ComparisonInfo."""
         if len(results) != 1:
             raise ValueError("Expected exactly one key in results dictionary.")
@@ -80,7 +81,7 @@ class HTMLRenderer:
         comparison_info = []
         for test_results in results.values():
             for result in test_results:
-                comparison_info.append(ComparisonInfo(
+                comparison_info.append(TestResults(
                     test_name=result.get('name', ''),
                     score=result.get('score', 0),
                     max_score=result.get('max_score', 0),
