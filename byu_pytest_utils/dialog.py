@@ -157,9 +157,9 @@ def _score_observed_output(expected_output, observed_output):
         return text + ' ' * (80 - len(text))
 
     group_obs[DEFAULT_GROUP] = pad(
-        obs.replace(GAP, ''))
+        obs)
     group_exp[DEFAULT_GROUP] = pad(
-        exp.replace(GAP, ''))
+        exp)
 
     group_stats = {}
     for group_id, group_name in group_names.items():
@@ -169,8 +169,8 @@ def _score_observed_output(expected_output, observed_output):
         group_max = group_weights[group_id] / 100
         group_stats[group_name] = {
             'group_name': group_name,
-            'expected': group_exp[group_id].replace(GAP, ''),
-            'observed': group_obs[group_id].replace(GAP, ''),
+            'expected': group_exp[group_id],
+            'observed': group_obs[group_id],
             'score': group_matches.get(group_id, 0) / group_counts[group_id] * group_max,
             'max_score': group_max,
             'passed': group_max == 0 or group_matches.get(group_id, -1) == group_counts[group_id],
@@ -182,8 +182,8 @@ def _score_observed_output(expected_output, observed_output):
 def _consolidate_stats(name, stats):
     return {
         'name': name,
-        'expected': stats['everything-else']['expected'].replace(GAP, ''),
-        'observed': stats['everything-else']['observed'].replace(GAP, ''),
+        'expected': stats['everything-else']['expected'],
+        'observed': stats['everything-else']['observed'],
         'score': round(sum(group['score'] for group in stats.values()), 3),
         'max_score': round(sum(group['max_score'] for group in stats.values()), 3),
         'passed': all(group['passed'] for group in stats.values()),

@@ -67,7 +67,7 @@ class HTMLRenderer:
         soup = BeautifulSoup(html_content, 'html.parser')
         results = []
 
-        for cls in ['test-result-passed', 'test-result-failed']:
+        for cls in ['comparison-container']:
             results.extend(str(div) for div in soup.find_all('div', class_=cls))
 
         return results
@@ -95,50 +95,18 @@ class HTMLRenderer:
     @staticmethod
     def _build_comparison_strings(obs: str, exp: str, gap: str) -> tuple[str, str]:
         """Return observed and expected strings with HTML span highlighting."""
-        def wrap_span(text: str, color: Optional[str]) -> str:
-            return f'<span style="background-color:{color}; box-shadow: 0 0 0 {color};">{text}</span>' if text else ''
-
         observed, expected = '', ''
-        curr_obs, curr_exp = '', ''
-        obs_color, exp_color = None, None
 
         for o, e in zip(obs, exp):
-            if o == gap:
-                if obs_color != GREEN:
-                    observed += wrap_span(curr_obs, obs_color)
-                    curr_obs, obs_color = o, GREEN
-                else:
-                    curr_obs += o
+            if o == e:
+                observed += o
+                expected += e
+            elif o == gap:
+                expected += f'<span style="background-color: {RED}">{e}</span>'
             elif e == gap:
-                if exp_color != RED:
-                    expected += wrap_span(curr_exp, exp_color)
-                    curr_exp, exp_color = e, RED
-                else:
-                    curr_exp += e
-            elif o != e:
-                if obs_color != BLUE:
-                    observed += wrap_span(curr_obs, obs_color)
-                    curr_obs, obs_color = o, BLUE
-                else:
-                    curr_obs += o
-
-                if exp_color != BLUE:
-                    expected += wrap_span(curr_exp, exp_color)
-                    curr_exp, exp_color = e, BLUE
-                else:
-                    curr_exp += e
+                observed += f'<span style="background-color: {GREEN}">{o}</span>'
             else:
-                observed += wrap_span(curr_obs, obs_color) + o
-                expected += wrap_span(curr_exp, exp_color) + e
-                curr_obs, curr_exp = '', ''
-                obs_color = exp_color = None
-
-        observed += wrap_span(curr_obs, obs_color)
-        expected += wrap_span(curr_exp, exp_color)
-
-        if len(obs) > len(exp):
-            observed += wrap_span(obs[len(exp):], BLUE)
-        elif len(exp) > len(obs):
-            expected += wrap_span(exp[len(obs):], BLUE)
+                observed += f'<span style="background-color: {BLUE}">{o}</span>'
+                expected += f'<span style="background-color: {BLUE}">{e}</span>'
 
         return observed, expected
