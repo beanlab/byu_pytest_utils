@@ -59,6 +59,7 @@ def get_gradescope_results(test_results:list[TestResults], html_results):
             {
                 'name': test_result.test_name,
                 'output': report,
+                'output_format': 'html',
                 'score': round(test_result.score, 3),
                 'max_score': round(test_result.max_score, 3),
                 'visibility': 'visible',
