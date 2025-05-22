@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -18,6 +19,7 @@ class TestResults:
     max_score: float
     observed: str
     expected: str
+    output: str
     passed: bool
 
 
@@ -43,6 +45,7 @@ class HTMLRenderer:
                 (
                     info.test_name.replace('_', ' ').replace('-', ' ').title(),
                     *self._build_comparison_strings(info.observed, info.expected, gap),
+                    info.output,
                     info.score,
                     info.max_score,
                     'passed' if info.passed else 'failed',
@@ -67,8 +70,8 @@ class HTMLRenderer:
         soup = BeautifulSoup(html_content, 'html.parser')
         results = []
 
-        # Find all .comparison-container divs
-        for container in soup.find_all('div', class_='comparison-container'):
+
+        for container in soup.find_all('div', class_=re.compile(r'\bcomparison-container(-empty)?\b')):
             # Inline styles for .comparison-container
             container['style'] = (
                 "display: flex; "
