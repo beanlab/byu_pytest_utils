@@ -1,0 +1,24 @@
+name: pypi_build
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+jobs:
+  check-byu-pytest-utils-version:
+    uses: ./.github/workflows/check-byu-pytest-utils.yaml
+
+  build:
+    needs: check-byu-pytest-utils-version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Build byu_pytest_utils package
+        run: poetry build

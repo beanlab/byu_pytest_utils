@@ -1,0 +1,33 @@
+name: pypi_build_and_publish
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [merged]
+
+jobs:
+  check-byu-pytest-utils-version:
+    uses: ./.github/workflows/check-byu-pytest-utils.yaml
+
+  build:
+    needs: check-byu-pytest-utils-version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Build byu_pytest_utils package
+        run: poetry build
+
+      - name: Publish byu_pytest_utils package
+        env:
+          POETRY_PYPI_USERNAME: ${{ secrets.PYPI_USER }}
+          POETRY_PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: poetry publish --username $POETRY_PYPI_USERNAME --password $POETRY_PYPI_PASSWORD
+
