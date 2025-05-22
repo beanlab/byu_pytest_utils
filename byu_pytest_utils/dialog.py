@@ -195,7 +195,7 @@ def _score_output(
         expected_files: list[tuple[Path, Path]]
 ):
     # ORIGINAL - per-group test results
-    # group_stats = {}
+    # group_stats = { }
     # group_stats.update({'stdout-' + k: v for k, v in _score_observed_output(expected_io, observed_io).items()})
     # for exp_file, obs_file in expected_files:
     #     if not obs_file.exists():
