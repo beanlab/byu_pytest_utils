@@ -136,7 +136,7 @@
                 <span>Passed: {{ TESTS_PASSED }} / {{ TOTAL_TESTS }}</span>
                 <span>Total Score: {{ TOTAL_SCORE }} / {{ TOTAL_POSSIBLE_SCORE }}</span>
             </div>
-            {% for name, observed, expected, score, max_score, status in COMPARISON_INFO %}
+            {% for name, observed, expected, output, score, max_score, status in COMPARISON_INFO %}
             <div class="test-result-{{ status }}">
                 <div class="content-wrapper">
                     <div class="result-header">
@@ -150,6 +150,7 @@
                             </div>
                         </div>
                     </div>
+                    {% if observed and expected %}
                     <div class="comparison-container">
                         <div class="section">
                             <p><strong>Observed (Your Actual Output)</strong></p>
@@ -164,6 +165,18 @@
                             </div>
                         </div>
                     </div>
+                    {% elif output %}
+                    <div class="comparison-container">
+                        <div class="section">
+                            <p><strong>Output</strong></p>
+                            <div class="content">
+                                <pre>{{ output }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                        <div class="comparison-container-empty"></div>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}

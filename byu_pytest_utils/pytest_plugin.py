@@ -97,9 +97,10 @@ def parse_info(all_tests):
                 test_name=test_case_name.replace('_', ' ').title(),
                 score=round(score, 4),
                 max_score=round(max_score, 4),
-                observed=group_stats['observed'],
-                expected=group_stats['expected'],
-                passed=group_stats['passed']
+                observed=group_stats.get('observed', ''),
+                expected=group_stats.get('expected', ''),
+                output=s.longreprtext,
+                passed=s.passed
             )
         )
 
